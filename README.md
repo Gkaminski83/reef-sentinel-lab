@@ -183,8 +183,8 @@ Krok 5 ── Sentinel View (Module 4) – opcjonalny
 
 | Dokument | Opis |
 |----------|------|
-| [`docs/BOM_sentinel_hub_chem_monitor.md`](docs/BOM_sentinel_hub_chem_monitor.md) | Lista komponentów Module 1+2 |
-| [`docs/BOM_sentinel_view.md`](docs/BOM_sentinel_view.md) | Lista komponentów Module 4 |
+| [`docs/BOM_sentinel_hub_chem_monitor.md`](docs/sentinel_hub_chem_monitor_BOM.md) | Lista komponentów Module 1+2 |
+| [`docs/BOM_sentinel_view.md`](docs/sentinel_view_BOM.md) | Lista komponentów Module 4 |
 | [`docs/BUILD_GUIDE_sentinel_hub.md`](docs/BUILD_GUIDE_sentinel_hub.md) | Instrukcja montażu Module 1 |
 | [`docs/BUILD_GUIDE_sentinel_chem_monitor.md`](docs/BUILD_GUIDE_sentinel_chem_monitor.md) | Instrukcja montażu Module 2 |
 | [`docs/BUILD_GUIDE_sentinel_photometer.md`](docs/BUILD_GUIDE_sentinel_photometer.md) | Szkielet Module 3 (Q3 2026) |
