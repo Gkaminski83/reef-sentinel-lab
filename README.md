@@ -15,7 +15,7 @@
 
 ## Dlaczego Reef Sentinel?
 
-Pamiętasz **Reef Factory**? Urządzenia za 2500–6000 zł. Upadłość w 2024. Tysiące akwarystów z cegłami zamiast kontrolerów.
+Pamiętasz **Reef Factory**? Urządzenia za 2500–6000 zł. Upadłość w 2024. Jeśli dystrybutorzy wyłączą serwery tysiące akwarystów zostanie z cegłami zamiast kontrolerów.
 
 **Z Reef Sentinel to się nie może zdarzyć.**
 
