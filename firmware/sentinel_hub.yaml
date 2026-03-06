@@ -1,0 +1,391 @@
+# ============================================================
+# Reef Sentinel Lab – Sentinel Hub (Module 1)
+# ESPHome firmware v1.0
+# ============================================================
+# Hardware:
+#   ESP32-WROOM-32 (30-pin DevKit)
+#   LM2596 12V→5V (dedykowany zasilacz 12V/2A)
+#   Grove OLED 0.96" SSD1306 I2C
+#   SD Card Reader SPI (opcjonalny)
+#
+# Funkcje:
+#   WiFi AP: SentinelHub (10.42.0.1) dla modułów
+#   WiFi STA: połączenie z siecią domową
+#   MQTT Broker: port 1883 (dla wszystkich modułów)
+#   OLED: status systemu
+#   SD: logowanie danych (opcjonalnie)
+#   Cloud sync: POST → reef-sentinel.com/api co 15 min
+# ============================================================
+
+# ────────────────────────────────────────────────────────────
+# SEKCJA: Tożsamość urządzenia
+# ────────────────────────────────────────────────────────────
+esphome:
+  name: sentinel-hub
+  friendly_name: "Sentinel Hub"
+  comment: "Reef Sentinel Lab – Module 1 / WiFi Coordinator"
+  on_boot:
+    priority: -100
+    then:
+      - logger.log: "Sentinel Hub booting..."
+      - script.execute: update_oled
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+# ────────────────────────────────────────────────────────────
+# SEKCJA: Logger
+# ────────────────────────────────────────────────────────────
+logger:
+  level: INFO
+  baud_rate: 115200
+
+# ────────────────────────────────────────────────────────────
+# SEKCJA: OTA + API
+# ────────────────────────────────────────────────────────────
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+# ────────────────────────────────────────────────────────────
+# SEKCJA: WiFi – Dual mode (AP + STA)
+# ────────────────────────────────────────────────────────────
+wifi:
+  # STA – połączenie z siecią domową (dostęp do internetu, HA)
+  ssid: !secret wifi_home_ssid
+  password: !secret wifi_home_password
+
+  # AP – sieć dla modułów Reef Sentinel
+  ap:
+    ssid: "SentinelHub"
+    password: !secret wifi_ap_password
+    # Stałe IP dla AP – moduły łączą się zawsze pod 10.42.0.1
+    manual_ip:
+      static_ip: 10.42.0.1
+      gateway: 10.42.0.1
+      subnet: 255.255.255.0
+
+  # Fallback AP jeśli sieć domowa niedostępna
+  power_save_mode: none
+
+captive_portal:
+
+# ────────────────────────────────────────────────────────────
+# SEKCJA: MQTT Broker
+# Hub działa jako broker MQTT dla wszystkich modułów
+# Moduły łączą się pod 10.42.0.1:1883
+# ────────────────────────────────────────────────────────────
+mqtt:
+  broker: 127.0.0.1   # Lokalny broker na tym samym ESP32
+  port: 1883
+  topic_prefix: reef/hub
+  keepalive: 60s
+  log_topic:
+    topic: reef/hub/logs
+    level: WARN
+  on_connect:
+    then:
+      - logger.log: "MQTT Broker ready"
+      - script.execute: update_oled
+  on_disconnect:
+    then:
+      - logger.log: "MQTT disconnected"
+
+# ────────────────────────────────────────────────────────────
+# SEKCJA: I2C (OLED)
+# ────────────────────────────────────────────────────────────
+i2c:
+  sda: GPIO21
+  scl: GPIO22
+  scan: true
+  frequency: 400kHz
+
+# ────────────────────────────────────────────────────────────
+# SEKCJA: SPI (SD Card – opcjonalny)
+# ────────────────────────────────────────────────────────────
+spi:
+  clk_pin: GPIO18
+  mosi_pin: GPIO23
+  miso_pin: GPIO19
+
+# ────────────────────────────────────────────────────────────
+# SEKCJA: SD Card
+# Odkomentuj jeśli używasz karty SD do logowania
+# ────────────────────────────────────────────────────────────
+# sd_mmc_card:  # Lub sd_card_fat
+#   cs_pin: GPIO5
+#   id: sd_card
+
+# ────────────────────────────────────────────────────────────
+# SEKCJA: OLED SSD1306 0.96"
+# ────────────────────────────────────────────────────────────
+display:
+  - platform: ssd1306_i2c
+    model: "SSD1306 128x64"
+    address: 0x3C
+    id: oled_display
+    auto_clear_enabled: true
+    lambda: |-
+      // Linia 1: Nazwa + IP
+      it.printf(0, 0, id(font_small), "Sentinel Hub");
+      it.printf(0, 12, id(font_small), "IP: %s", WiFi.localIP().toString().c_str());
+      // Linia 3: WiFi signal
+      it.printf(0, 24, id(font_small), "WiFi: %ddBm", WiFi.RSSI());
+      // Linia 4-5: Dane z modułów
+      it.printf(0, 36, id(font_small), "pH: %.2f  KH: %.1f",
+        id(ph_value).state,
+        id(kh_value).state);
+      it.printf(0, 48, id(font_small), "T: %.1f  EC: %.0f",
+        id(temp_aquarium).state,
+        id(ec_value).state);
+
+font:
+  - file: "gfonts://Roboto Mono"
+    id: font_small
+    size: 10
+
+# ────────────────────────────────────────────────────────────
+# SEKCJA: Status LED (GPIO2 wbudowana)
+# ────────────────────────────────────────────────────────────
+status_led:
+  pin:
+    number: GPIO2
+    inverted: false
+
+# ────────────────────────────────────────────────────────────
+# SEKCJA: Sensory – odbiór danych z modułów przez MQTT
+# Hub subskrybuje topiki z Sentinel Chem/Monitor
+# i udostępnia je jako encje w Home Assistant
+# ────────────────────────────────────────────────────────────
+sensor:
+  # pH – z Sentinel Chem
+  - platform: mqtt_subscribe
+    name: "pH"
+    id: ph_value
+    topic: reef/chem/ph/value
+    unit_of_measurement: ""
+    accuracy_decimals: 2
+    icon: mdi:ph
+    device_class: ""
+    state_class: measurement
+
+  # KH – wynik titracji z Sentinel Chem
+  - platform: mqtt_subscribe
+    name: "KH"
+    id: kh_value
+    topic: reef/chem/kh/value
+    unit_of_measurement: "dKH"
+    accuracy_decimals: 1
+    icon: mdi:test-tube
+    state_class: measurement
+
+  # Temperatura akwarium – z Sentinel Monitor
+  - platform: mqtt_subscribe
+    name: "Temperatura Akwarium"
+    id: temp_aquarium
+    topic: reef/chem/temp/aquarium
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    device_class: temperature
+    state_class: measurement
+
+  # Temperatura sump
+  - platform: mqtt_subscribe
+    name: "Temperatura Sump"
+    id: temp_sump
+    topic: reef/chem/temp/sump
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    device_class: temperature
+    state_class: measurement
+
+  # Temperatura komory pomiarowej
+  - platform: mqtt_subscribe
+    name: "Temperatura Komora"
+    id: temp_chamber
+    topic: reef/chem/temp/chamber
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    device_class: temperature
+    state_class: measurement
+
+  # EC / Zasolenie
+  - platform: mqtt_subscribe
+    name: "EC Zasolenie"
+    id: ec_value
+    topic: reef/chem/ec/value
+    unit_of_measurement: "µS/cm"
+    accuracy_decimals: 0
+    icon: mdi:water-percent
+    state_class: measurement
+
+  # WiFi signal Hub
+  - platform: wifi_signal
+    name: "Hub WiFi Signal"
+    update_interval: 60s
+    unit_of_measurement: "dBm"
+    device_class: signal_strength
+    state_class: measurement
+
+  # Uptime Hub
+  - platform: uptime
+    name: "Hub Uptime"
+    update_interval: 60s
+    unit_of_measurement: "s"
+
+# ────────────────────────────────────────────────────────────
+# SEKCJA: Binary sensors – statusy modułów
+# ────────────────────────────────────────────────────────────
+binary_sensor:
+  # Status połączenia z siecią domową
+  - platform: status
+    name: "Hub Status"
+
+  # Status testu KH (czy trwa titracja)
+  - platform: mqtt_subscribe
+    name: "Test KH Aktywny"
+    id: kh_test_active
+    topic: reef/chem/kh/test_running
+    payload_on: "true"
+    payload_off: "false"
+
+# ────────────────────────────────────────────────────────────
+# SEKCJA: Text sensors
+# ────────────────────────────────────────────────────────────
+text_sensor:
+  # IP Hub na AP
+  - platform: wifi_info
+    ip_address:
+      name: "Hub IP Address"
+    ssid:
+      name: "Hub WiFi SSID"
+
+  # Ostatni wynik testu KH (timestamp + wartość)
+  - platform: mqtt_subscribe
+    name: "Ostatni Test KH"
+    topic: reef/chem/kh/last_result
+
+# ────────────────────────────────────────────────────────────
+# SEKCJA: Przyciski
+# ────────────────────────────────────────────────────────────
+button:
+  # Restart Hub
+  - platform: restart
+    name: "Hub Restart"
+
+  # Wymuś cloud sync natychmiast
+  - platform: template
+    name: "Force Cloud Sync"
+    on_press:
+      - script.execute: cloud_sync
+
+  # Wymuś test KH natychmiast (wysyła komendę do Sentinel Chem)
+  - platform: template
+    name: "Start Test KH"
+    on_press:
+      - mqtt.publish:
+          topic: reef/chem/cmd/start_kh_test
+          payload: "true"
+      - logger.log: "KH test command sent"
+
+# ────────────────────────────────────────────────────────────
+# SEKCJA: Czas – pobieranie NTP
+# ────────────────────────────────────────────────────────────
+time:
+  - platform: sntp
+    id: sntp_time
+    timezone: "Europe/Warsaw"
+    servers:
+      - pool.ntp.org
+      - time.google.com
+    on_time_sync:
+      - logger.log: "Time synced"
+    # Zaplanowane testy KH (można zmienić w HA przez input_number)
+    on_time:
+      # Test KH o 08:00
+      - seconds: 0
+        minutes: 0
+        hours: 8
+        then:
+          - mqtt.publish:
+              topic: reef/chem/cmd/start_kh_test
+              payload: "true"
+          - logger.log: "Scheduled KH test at 08:00"
+      # Opcjonalny drugi test o 20:00 (odkomentuj jeśli potrzebujesz)
+      # - seconds: 0
+      #   minutes: 0
+      #   hours: 20
+      #   then:
+      #     - mqtt.publish:
+      #         topic: reef/chem/cmd/start_kh_test
+      #         payload: "true"
+
+# ────────────────────────────────────────────────────────────
+# SEKCJA: Skrypty
+# ────────────────────────────────────────────────────────────
+script:
+  # Odświeżenie OLED
+  - id: update_oled
+    then:
+      - component.update: oled_display
+
+  # Cloud sync – POST do reef-sentinel.com
+  # Agreguje dane z ostatnich 15 minut i wysyła do API
+  - id: cloud_sync
+    then:
+      - logger.log: "Cloud sync starting..."
+      - http_request.post:
+          url: "https://reef-sentinel.com/api/integrations/webhook"
+          headers:
+            Content-Type: application/json
+            X-API-Key: !secret reef_sentinel_api_key
+          json:
+            tank_id: !secret tank_id
+            measurements:
+              - parameter: ph
+                value: !lambda "return id(ph_value).state;"
+                timestamp: !lambda "return id(sntp_time).now().timestamp;"
+              - parameter: kh
+                value: !lambda "return id(kh_value).state;"
+                timestamp: !lambda "return id(sntp_time).now().timestamp;"
+              - parameter: temp_aquarium
+                value: !lambda "return id(temp_aquarium).state;"
+                timestamp: !lambda "return id(sntp_time).now().timestamp;"
+              - parameter: temp_sump
+                value: !lambda "return id(temp_sump).state;"
+                timestamp: !lambda "return id(sntp_time).now().timestamp;"
+              - parameter: ec
+                value: !lambda "return id(ec_value).state;"
+                timestamp: !lambda "return id(sntp_time).now().timestamp;"
+          on_response:
+            then:
+              - if:
+                  condition:
+                    lambda: "return response->status_code == 200;"
+                  then:
+                    - logger.log: "Cloud sync OK"
+                  else:
+                    - logger.log:
+                        format: "Cloud sync FAILED: HTTP %d"
+                        args: ["response->status_code"]
+
+# Cloud sync co 15 minut przez interval
+interval:
+  - interval: 15min
+    then:
+      - script.execute: cloud_sync
+      - script.execute: update_oled
+
+# ────────────────────────────────────────────────────────────
+# SEKCJA: HTTP Request (potrzebny do cloud sync)
+# ────────────────────────────────────────────────────────────
+http_request:
+  useragent: "sentinel-hub/1.0 ESPHome"
+  timeout: 10s
+  verify_ssl: true

@@ -1,0 +1,660 @@
+# ============================================================
+# Reef Sentinel Lab – Sentinel Chem/Monitor (Module 2)
+# ESPHome firmware v1.0
+# ============================================================
+# Hardware:
+#   ESP32-WROOM-32 (30-pin DevKit)
+#   LM2596 12V→3A (dedykowany zasilacz 12V/3A)
+#   DFRobot Gravity pH V2 → GPIO34
+#   DFRobot Gravity TDS/EC → GPIO32
+#   DS18B20 × 3 (1-Wire) → GPIO33, rezystor 4.7kΩ
+#   MOSFET DFRobot × 5:
+#     #1 GPIO15 → Pompka próbka (akwarium → komora)
+#     #2 GPIO2  → Pompka HCl 0.1M ⚠️
+#     #3 GPIO4  → Pompka odpad (komora → kanister)
+#     #4 GPIO16 → Pompka RO (kanister → komora / storage pH)
+#     #5 GPIO25 → Silnik stirrer (PWM)
+#
+# Funkcje:
+#   Automatyczna titracja KH (HCl 0.1M, punkt końcowy pH 4.5)
+#   Monitoring pH 24/7 (sonda przechowywana w RO między pomiarami)
+#   Temperatura × 3 (akwarium, sump, komora)
+#   EC / Zasolenie (ciągły, z kompensacją temperatury)
+#   Publikacja danych przez MQTT → Sentinel Hub (10.42.0.1)
+# ============================================================
+
+# ────────────────────────────────────────────────────────────
+# SEKCJA: Tożsamość urządzenia
+# ────────────────────────────────────────────────────────────
+esphome:
+  name: sentinel-chem
+  friendly_name: "Sentinel Chem/Monitor"
+  comment: "Reef Sentinel Lab – Module 2 / Chemistry & Monitoring"
+  on_boot:
+    priority: -100
+    then:
+      - logger.log: "Sentinel Chem booting..."
+      # Bezpieczny stan startowy – wszystkie pompki wyłączone
+      - switch.turn_off: pump_sample
+      - switch.turn_off: pump_hcl
+      - switch.turn_off: pump_waste
+      - switch.turn_off: pump_ro
+      - output.set_level:
+          id: stirrer_pwm
+          level: 0.0
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+# ────────────────────────────────────────────────────────────
+# SEKCJA: Logger
+# ────────────────────────────────────────────────────────────
+logger:
+  level: INFO
+  baud_rate: 115200
+
+# ────────────────────────────────────────────────────────────
+# SEKCJA: OTA + API
+# ────────────────────────────────────────────────────────────
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+# ────────────────────────────────────────────────────────────
+# SEKCJA: WiFi – łączy się z AP Sentinel Hub
+# ────────────────────────────────────────────────────────────
+wifi:
+  ssid: "SentinelHub"
+  password: !secret wifi_ap_password
+  # Stałe IP w sieci Hub – ułatwia diagnostykę
+  manual_ip:
+    static_ip: 10.42.0.2
+    gateway: 10.42.0.1
+    subnet: 255.255.255.0
+  power_save_mode: none
+  reboot_timeout: 5min
+
+# ────────────────────────────────────────────────────────────
+# SEKCJA: MQTT – publikuje dane do Hub
+# ────────────────────────────────────────────────────────────
+mqtt:
+  broker: 10.42.0.1
+  port: 1883
+  topic_prefix: reef/chem
+  keepalive: 60s
+  on_connect:
+    then:
+      - logger.log: "Connected to Sentinel Hub MQTT"
+  on_disconnect:
+    then:
+      - logger.log: "MQTT disconnected – retrying"
+
+# ────────────────────────────────────────────────────────────
+# SEKCJA: Zmienne globalne
+# Przechowują stan titracji między krokami skryptu
+# ────────────────────────────────────────────────────────────
+globals:
+  # Objętość HCl dozowana podczas titracji [ml]
+  - id: hcl_volume_ml
+    type: float
+    restore_value: false
+    initial_value: "0.0"
+
+  # pH przed titrację (punkt startowy)
+  - id: ph_start
+    type: float
+    restore_value: false
+    initial_value: "0.0"
+
+  # Licznik impulsów HCl (każdy impuls = 0.1s ≈ 0.05ml)
+  - id: hcl_pulse_count
+    type: int
+    restore_value: false
+    initial_value: "0"
+
+  # Flaga: czy titracja aktualnie trwa
+  - id: titration_running
+    type: bool
+    restore_value: false
+    initial_value: "false"
+
+  # Wynik KH z ostatniego testu [dKH]
+  - id: kh_result
+    type: float
+    restore_value: true   # Zapamiętaj po restarcie
+    initial_value: "0.0"
+
+  # Stała kalibracyjna pompki HCl: ml na 100ms impulsu
+  # Kalibruj mierząc faktyczny przepływ! Domyślnie ~0.05 ml/100ms
+  - id: pump_hcl_ml_per_pulse
+    type: float
+    restore_value: true
+    initial_value: "0.05"
+
+  # Stężenie HCl [mol/L] – do obliczenia KH
+  # HCl 0.1M = 0.1
+  - id: hcl_concentration
+    type: float
+    restore_value: true
+    initial_value: "0.1"
+
+  # Objętość próbki [ml]
+  - id: sample_volume_ml
+    type: float
+    restore_value: true
+    initial_value: "30.0"
+
+# ────────────────────────────────────────────────────────────
+# SEKCJA: 1-Wire (DS18B20 temperatury)
+# ────────────────────────────────────────────────────────────
+one_wire:
+  - platform: gpio
+    pin: GPIO33
+
+# ────────────────────────────────────────────────────────────
+# SEKCJA: Sensory
+# ────────────────────────────────────────────────────────────
+sensor:
+  # ── DS18B20 × 3 ─────────────────────────────────────────
+  # Adresy uzupełnij po pierwszym uruchomieniu z logów ESPHome
+  # (szukaj: "Found sensors with address: 0x...")
+  - platform: dallas_temp
+    address: 0x0000000000000000   # ← zastąp adresem z logów
+    name: "Temperatura Akwarium"
+    id: temp_aquarium
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    device_class: temperature
+    state_class: measurement
+    update_interval: 30s
+    on_value:
+      then:
+        - mqtt.publish:
+            topic: reef/chem/temp/aquarium
+            payload: !lambda "return to_string(x);"
+
+  - platform: dallas_temp
+    address: 0x0000000000000001   # ← zastąp adresem z logów
+    name: "Temperatura Sump"
+    id: temp_sump
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    device_class: temperature
+    state_class: measurement
+    update_interval: 30s
+    on_value:
+      then:
+        - mqtt.publish:
+            topic: reef/chem/temp/sump
+            payload: !lambda "return to_string(x);"
+
+  - platform: dallas_temp
+    address: 0x0000000000000002   # ← zastąp adresem z logów
+    name: "Temperatura Komora"
+    id: temp_chamber
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    device_class: temperature
+    state_class: measurement
+    update_interval: 10s   # Szybciej – używana do kompensacji pH
+    on_value:
+      then:
+        - mqtt.publish:
+            topic: reef/chem/temp/chamber
+            payload: !lambda "return to_string(x);"
+
+  # ── pH (DFRobot Gravity pH V2) ──────────────────────────
+  # GPIO34 – ADC1_CH6, tylko INPUT
+  # Kalibracja 2-punktowa: bufor pH 4.0 i pH 7.0
+  - platform: adc
+    pin: GPIO34
+    name: "pH"
+    id: ph_sensor
+    unit_of_measurement: ""
+    accuracy_decimals: 2
+    update_interval: 15s
+    attenuation: 11dB   # Zakres 0–3.9V
+    filters:
+      # Kalibracja liniowa 2-punktowa
+      # Krok 1: zmierz napięcie przy pH 4.0 → wpisz jako pierwszą parę
+      # Krok 2: zmierz napięcie przy pH 7.0 → wpisz jako drugą parę
+      # Przykładowe wartości – MUSISZ skalibrować swoją elektrodę!
+      - calibrate_linear:
+          - 2.03 -> 4.0    # ← napięcie [V] → pH 4.0
+          - 2.50 -> 7.0    # ← napięcie [V] → pH 7.0
+      # Kompensacja temperatury (Nernst, ~0.003 pH/°C)
+      # Wartość odejmowana / dodawana względem 25°C
+      - lambda: |-
+          float temp = id(temp_chamber).state;
+          if (isnan(temp)) temp = 25.0;
+          // Korekta: każdy stopień powyżej 25°C obniża pH o 0.003
+          return x + (25.0 - temp) * 0.003;
+      # Mediana z 5 odczytów (odrzuca skoki)
+      - median:
+          window_size: 5
+          send_every: 5
+          send_first_at: 5
+      # Zaokrąglenie do 0.01
+      - round: 2
+    icon: mdi:ph
+    state_class: measurement
+    on_value:
+      then:
+        - mqtt.publish:
+            topic: reef/chem/ph/value
+            payload: !lambda "return to_string(x);"
+
+  # ── EC / TDS (DFRobot Gravity TDS) ─────────────────────
+  # GPIO32 – ADC1_CH4, tylko INPUT
+  # Kalibracja jednopunktowa: roztwór 35 ppt (≈ 53mS/cm)
+  - platform: adc
+    pin: GPIO32
+    name: "EC Zasolenie"
+    id: ec_sensor
+    unit_of_measurement: "µS/cm"
+    accuracy_decimals: 0
+    update_interval: 60s
+    attenuation: 11dB
+    filters:
+      # Konwersja napięcia → EC (µS/cm)
+      # Wzór DFRobot: EC = (133.42 * V^3 - 255.86 * V^2 + 857.39 * V) * K
+      # K = współczynnik kalibracyjny (domyślnie 1.0, ustaw po kalibracji)
+      - lambda: |-
+          float voltage = x;
+          float k = 1.0;  // ← współczynnik kalibracji
+          float ec = (133.42 * voltage * voltage * voltage
+                    - 255.86 * voltage * voltage
+                    + 857.39 * voltage) * k;
+          // Kompensacja temperatury (2% / °C)
+          float temp = id(temp_aquarium).state;
+          if (!isnan(temp)) {
+            ec = ec / (1.0 + 0.02 * (temp - 25.0));
+          }
+          return ec > 0 ? ec : 0;
+      - round: 0
+    icon: mdi:water-percent
+    state_class: measurement
+    on_value:
+      then:
+        - mqtt.publish:
+            topic: reef/chem/ec/value
+            payload: !lambda "return to_string(x);"
+
+  # ── KH – wynik titracji (template sensor) ───────────────
+  - platform: template
+    name: "KH"
+    id: kh_sensor
+    unit_of_measurement: "dKH"
+    accuracy_decimals: 1
+    icon: mdi:test-tube
+    state_class: measurement
+    lambda: |-
+      return id(kh_result);
+    update_interval: never   # Aktualizowany tylko po titracji
+
+  # WiFi signal
+  - platform: wifi_signal
+    name: "Chem WiFi Signal"
+    update_interval: 60s
+
+# ────────────────────────────────────────────────────────────
+# SEKCJA: Binary sensors
+# ────────────────────────────────────────────────────────────
+binary_sensor:
+  - platform: status
+    name: "Chem Status"
+
+  # Status titracji KH – widoczny w HA
+  - platform: template
+    name: "Test KH Aktywny"
+    id: kh_test_running
+    lambda: |-
+      return id(titration_running);
+    on_state:
+      then:
+        - mqtt.publish:
+            topic: reef/chem/kh/test_running
+            payload: !lambda "return x ? \"true\" : \"false\";"
+
+# ────────────────────────────────────────────────────────────
+# SEKCJA: PWM Output (Stirrer)
+# ────────────────────────────────────────────────────────────
+output:
+  - platform: ledc
+    pin: GPIO25
+    id: stirrer_pwm
+    frequency: 1000Hz
+
+# ────────────────────────────────────────────────────────────
+# SEKCJA: Fan (Stirrer jako wentylator – sterowanie procentowe)
+# Pozwala sterować prędkością z HA i YAML
+# ────────────────────────────────────────────────────────────
+fan:
+  - platform: speed
+    output: stirrer_pwm
+    name: "Stirrer"
+    id: stirrer
+
+# ────────────────────────────────────────────────────────────
+# SEKCJA: Switch (Pompki przez MOSFET)
+# ────────────────────────────────────────────────────────────
+switch:
+  # Pompka #1 – Próbka z akwarium → komora
+  - platform: gpio
+    pin: GPIO15
+    name: "Pompka Próbka"
+    id: pump_sample
+    restore_mode: ALWAYS_OFF
+    icon: mdi:pump
+
+  # Pompka #2 – HCl 0.1M → komora ⚠️ KWAS!
+  - platform: gpio
+    pin: GPIO2
+    name: "Pompka HCl"
+    id: pump_hcl
+    restore_mode: ALWAYS_OFF
+    icon: mdi:flask
+    # Zabezpieczenie: max 30s ciągłej pracy (nie dozuj więcej niż ~15ml)
+    on_turn_on:
+      - delay: 30s
+      - switch.turn_off: pump_hcl
+      - logger.log: "SAFETY: pump_hcl auto-off after 30s"
+
+  # Pompka #3 – Odpad komora → kanister
+  - platform: gpio
+    pin: GPIO4
+    name: "Pompka Odpad"
+    id: pump_waste
+    restore_mode: ALWAYS_OFF
+    icon: mdi:pump
+
+  # Pompka #4 – Woda RO → komora (też storage pH między pomiarami)
+  - platform: gpio
+    pin: GPIO16
+    name: "Pompka RO"
+    id: pump_ro
+    restore_mode: ALWAYS_OFF
+    icon: mdi:water
+
+# ────────────────────────────────────────────────────────────
+# SEKCJA: Przyciski
+# ────────────────────────────────────────────────────────────
+button:
+  - platform: restart
+    name: "Chem Restart"
+
+  # Start testu KH ręcznie (z HA lub fizycznie)
+  - platform: template
+    name: "Start Test KH"
+    on_press:
+      - script.execute: kh_test_sequence
+
+  # Ręczne płukanie komory (konserwacja)
+  - platform: template
+    name: "Flush Komora"
+    on_press:
+      - script.execute: flush_chamber
+
+# ────────────────────────────────────────────────────────────
+# SEKCJA: MQTT subskrypcje – komendy z Sentinel Hub
+# ────────────────────────────────────────────────────────────
+# Odbiór komendy start_kh_test z Hub lub HA
+on_message:
+  - platform: mqtt
+    topic: reef/chem/cmd/start_kh_test
+    payload: "true"
+    then:
+      - script.execute: kh_test_sequence
+
+# ────────────────────────────────────────────────────────────
+# SEKCJA: Skrypty – logika titracji KH
+# ────────────────────────────────────────────────────────────
+script:
+  # ──────────────────────────────────────────────────────────
+  # GŁÓWNY SKRYPT: Pełna sekwencja testu KH
+  # Czas: ~10–15 min
+  # ──────────────────────────────────────────────────────────
+  - id: kh_test_sequence
+    mode: single   # Nie uruchamiaj drugi raz jeśli trwa
+    then:
+      # ── FAZA 0: Sprawdzenie warunków ───────────────────
+      - if:
+          condition:
+            lambda: "return id(titration_running);"
+          then:
+            - logger.log: "KH test already running – skipped"
+            - script.stop: kh_test_sequence
+
+      - logger.log: "=== KH TEST START ==="
+      - globals.set:
+          id: titration_running
+          value: "true"
+      - globals.set:
+          id: hcl_pulse_count
+          value: "0"
+      - globals.set:
+          id: hcl_volume_ml
+          value: "0.0"
+
+      # ── FAZA 1: Opróżnienie komory z wody RO ──────────
+      - logger.log: "Phase 1: Emptying chamber (RO water out)"
+      - switch.turn_on: pump_waste
+      - delay: 30s
+      - switch.turn_off: pump_waste
+      - delay: 3s
+
+      # ── FAZA 2: Pobranie próbki z akwarium ────────────
+      - logger.log: "Phase 2: Sampling from aquarium"
+      - switch.turn_on: pump_sample
+      - delay: 20s   # ~30ml przy typowej pompce 90ml/min
+      - switch.turn_off: pump_sample
+      - delay: 5s
+
+      # ── FAZA 3: Włącz mieszadełko + stabilizacja ──────
+      - logger.log: "Phase 3: Stabilizing"
+      - fan.turn_on:
+          id: stirrer
+          speed: 60   # 60% prędkości
+      - delay: 30s   # Stabilizacja pH przed titrację
+
+      # ── FAZA 4: Odczyt pH startowego ──────────────────
+      - logger.log: "Phase 4: Reading start pH"
+      - globals.set:
+          id: ph_start
+          value: !lambda "return id(ph_sensor).state;"
+      - logger.log:
+          format: "Start pH: %.2f"
+          args: ["id(ph_start)"]
+
+      # Walidacja: pH powinno być między 7.5 a 9.0
+      - if:
+          condition:
+            lambda: "return id(ph_start) < 7.5 || id(ph_start) > 9.0;"
+          then:
+            - logger.log: "ERROR: Start pH out of range (7.5–9.0) – aborting"
+            - script.execute: kh_test_abort
+            - script.stop: kh_test_sequence
+
+      # ── FAZA 5: TITRACJA ──────────────────────────────
+      - logger.log: "Phase 5: Titration starting"
+      - script.execute: titration_loop
+
+      # ── Czekaj aż titracja skończy (max 8 min) ────────
+      - wait_until:
+          condition:
+            lambda: "return !id(titration_running) || id(hcl_pulse_count) > 200;"
+          timeout: 8min
+
+  # ──────────────────────────────────────────────────────────
+  # PĘTLA TITRACJI – dozuje HCl impulsami, monitoruje pH
+  # Punkt końcowy: pH ≤ 4.5
+  # ──────────────────────────────────────────────────────────
+  - id: titration_loop
+    mode: single
+    then:
+      - while:
+          condition:
+            # Kontynuuj dopóki:
+            # - pH powyżej 4.5 (punkt końcowy)
+            # - nie przekroczono 200 impulsów (~10ml – bezpiecznik)
+            lambda: |-
+              return id(ph_sensor).state > 4.5
+                  && id(hcl_pulse_count) < 200
+                  && id(titration_running);
+          then:
+            # Jeden impuls HCl: 100ms ≈ 0.05ml przy typowej pompce
+            - switch.turn_on: pump_hcl
+            - delay: 100ms
+            - switch.turn_off: pump_hcl
+
+            # Zlicz impuls i zaktualizuj objętość
+            - globals.set:
+                id: hcl_pulse_count
+                value: !lambda "return id(hcl_pulse_count) + 1;"
+            - globals.set:
+                id: hcl_volume_ml
+                value: !lambda |-
+                  return id(hcl_pulse_count) * id(pump_hcl_ml_per_pulse);
+
+            # Czekaj na wymieszcznie – ważne dla stabilnego pH
+            - delay: 5s
+
+      # ── Titracja zakończona ────────────────────────────
+      - logger.log:
+          format: "Titration end. Pulses: %d, HCl: %.2f ml, Final pH: %.2f"
+          args: ["id(hcl_pulse_count)", "id(hcl_volume_ml)", "id(ph_sensor).state"]
+
+      # Sprawdź czy zakończono normalnie (pH ≤ 4.5) czy awaryjnie
+      - if:
+          condition:
+            lambda: "return id(hcl_pulse_count) >= 200;"
+          then:
+            - logger.log: "WARNING: Max pulses reached – possible sensor issue"
+
+      # ── FAZA 6: Oblicz KH ─────────────────────────────
+      # Wzór: KH [dKH] = (V_HCl[ml] × C_HCl[mol/L] × 2.8) / V_próbki[ml]
+      # Gdzie 2.8 = przelicznik mmol/L → dKH (1 dKH = 0.357 mmol/L)
+      - globals.set:
+          id: kh_result
+          value: !lambda |-
+            float v_hcl = id(hcl_volume_ml);
+            float c_hcl = id(hcl_concentration);
+            float v_sample = id(sample_volume_ml);
+            if (v_sample == 0.0) return 0.0;
+            return (v_hcl * c_hcl * 2800.0) / v_sample;
+      - logger.log:
+          format: "=== KH RESULT: %.1f dKH ==="
+          args: ["id(kh_result)"]
+
+      # Opublikuj wynik
+      - component.update: kh_sensor
+      - mqtt.publish:
+          topic: reef/chem/kh/value
+          payload: !lambda "return to_string(id(kh_result));"
+      - mqtt.publish:
+          topic: reef/chem/kh/last_result
+          payload: !lambda |-
+            char buf[64];
+            snprintf(buf, sizeof(buf), "%.1f dKH", id(kh_result));
+            return std::string(buf);
+
+      # ── FAZA 7: Wyłącz mieszadełko ────────────────────
+      - fan.turn_off: stirrer
+
+      # ── FAZA 8: Płukanie komory ────────────────────────
+      - script.execute: flush_chamber
+
+      # ── FAZA 9: Napełnij komorę wodą RO (storage pH) ──
+      - logger.log: "Phase 9: Refilling chamber with RO (pH probe storage)"
+      - switch.turn_on: pump_ro
+      - delay: 25s
+      - switch.turn_off: pump_ro
+
+      # Zakończenie
+      - globals.set:
+          id: titration_running
+          value: "false"
+      - logger.log: "=== KH TEST COMPLETE ==="
+
+  # ──────────────────────────────────────────────────────────
+  # SKRYPT: Płukanie komory
+  # Trzykrotne płukanie wodą RO → odpad
+  # ──────────────────────────────────────────────────────────
+  - id: flush_chamber
+    then:
+      - logger.log: "Flushing chamber..."
+      # Płukanie #1
+      - switch.turn_on: pump_ro
+      - delay: 20s
+      - switch.turn_off: pump_ro
+      - delay: 2s
+      - switch.turn_on: pump_waste
+      - delay: 25s
+      - switch.turn_off: pump_waste
+      - delay: 2s
+      # Płukanie #2
+      - switch.turn_on: pump_ro
+      - delay: 20s
+      - switch.turn_off: pump_ro
+      - delay: 2s
+      - switch.turn_on: pump_waste
+      - delay: 25s
+      - switch.turn_off: pump_waste
+      - delay: 2s
+      # Płukanie #3
+      - switch.turn_on: pump_ro
+      - delay: 20s
+      - switch.turn_off: pump_ro
+      - delay: 2s
+      - switch.turn_on: pump_waste
+      - delay: 25s
+      - switch.turn_off: pump_waste
+      - logger.log: "Chamber flushed OK"
+
+  # ──────────────────────────────────────────────────────────
+  # SKRYPT: Przerwanie testu (błąd)
+  # ──────────────────────────────────────────────────────────
+  - id: kh_test_abort
+    then:
+      - logger.log: "KH test ABORTED"
+      - switch.turn_off: pump_sample
+      - switch.turn_off: pump_hcl
+      - switch.turn_off: pump_waste
+      - switch.turn_off: pump_ro
+      - fan.turn_off: stirrer
+      - globals.set:
+          id: titration_running
+          value: "false"
+      - mqtt.publish:
+          topic: reef/chem/kh/error
+          payload: "Test aborted – check pH sensor and connections"
+
+# ────────────────────────────────────────────────────────────
+# SEKCJA: Czas
+# ────────────────────────────────────────────────────────────
+time:
+  - platform: sntp
+    id: sntp_time
+    timezone: "Europe/Warsaw"
+    servers:
+      - pool.ntp.org
+
+# ────────────────────────────────────────────────────────────
+# SEKCJA: Interwały – monitoring ciągły
+# ────────────────────────────────────────────────────────────
+interval:
+  # Publikuj pH co 15 minut (niezależnie od on_value)
+  - interval: 15min
+    then:
+      - mqtt.publish:
+          topic: reef/chem/ph/value
+          payload: !lambda "return to_string(id(ph_sensor).state);"
+      - mqtt.publish:
+          topic: reef/chem/ec/value
+          payload: !lambda "return to_string(id(ec_sensor).state);"
