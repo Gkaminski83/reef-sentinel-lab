@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="image.png" alt="Reef Sentinel logo" width="180" />
+  <img src="logo.png" alt="Reef Sentinel" width="180" />
 </p>
 
 <h1 align="center">Reef Sentinel LAB</h1>
