@@ -1,4 +1,8 @@
-# ![alt text](image.png) Reef Sentinel Lab
+<p align="center">
+  <img src="image.png" alt="Reef Sentinel logo" width="180" />
+</p>
+
+<h1 align="center">Reef Sentinel LAB</h1>
 
 **Open-source reef aquarium controller. Mierzy KH, Ca, Mg automatycznie. Nie stanie się cegłą.**
 
