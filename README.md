@@ -1,4 +1,4 @@
-# 🐠 Reef Sentinel Lab
+# ![alt text](image.png) Reef Sentinel Lab
 
 **Open-source reef aquarium controller. Mierzy KH, Ca, Mg automatycznie. Nie stanie się cegłą.**
 
