@@ -1,3 +1,86 @@
+## English (Primary)
+
+# Reef Sentinel Lab - Build Guide
+## Module 3: Sentinel Photometer (Ca + Mg)
+
+Version: 0.1 (framework)
+Date: 2026-03-06
+Status: planned for Q3 2026
+Difficulty: advanced
+
+---
+
+## Scope
+
+This document defines the design framework for automated Ca/Mg photometry.
+Detailed assembly and firmware instructions are scheduled for Q3 2026.
+
+---
+
+## Measurement Principle
+
+Based on Beer-Lambert law:
+- Compare blank light intensity (I0) and sample intensity (I)
+- Compute absorbance
+- Convert absorbance to concentration using calibration curves
+
+Target channels:
+- Ca channel: ~650nm LED with Ca reagent chemistry
+- Mg channel: ~520nm LED with Mg reagent chemistry
+
+---
+
+## Proposed Hardware Architecture
+- ESP32 controller
+- ADS1115 (16-bit ADC) for photodiode precision
+- dual LED optical path (650nm/520nm)
+- photodiode receiver
+- shared optical chamber/cuvette
+- pump-driven fluid handling (sample, reagents, drain/flush)
+
+---
+
+## Preliminary BOM Themes
+- ESP32 + LM2596 power stage
+- ADS1115 + passives
+- narrow-angle LEDs + photodiode
+- 12V pumps + MOSFET control channels
+- light-tight 3D-printed optical enclosure
+- reagent containers and waste path
+
+---
+
+## Planned Sequence
+1. RO flush and blank measurement
+2. Ca sample + reagent reaction + reading
+3. drain/flush
+4. Mg sample + reagent reaction + reading
+5. publish results via MQTT
+
+---
+
+## Calibration Plan
+- multi-point standards for Ca and Mg
+- empirical curve fit for each channel
+- periodic recalibration (new reagent lot / drift checks)
+
+---
+
+## Known Risks
+- optical leakage into chamber
+- temperature effect on color reactions
+- bubbles in optical path
+- reagent stability over time
+
+---
+
+## Integration
+- publish to Hub MQTT topics for Ca/Mg
+- expose values to HA and Sentinel View
+
+---
+
+## Polish (PL)
 # Reef Sentinel Lab – BUILD GUIDE
 ## Module 3: Sentinel Photometer (Fotometr Ca + Mg)
 
@@ -9,7 +92,7 @@
 
 ---
 
-> **📋 NOTA O TYM DOKUMENCIE**  
+> **đź"‹ NOTA O TYM DOKUMENCIE**  
 > To jest szkielet build guide – zawiera architekturę, koncepcję i kluczowe decyzje projektowe.  
 > Szczegółowe instrukcje montażu i firmware zostaną uzupełnione w Q3 2026,  
 > gdy moduł wejdzie w fazę aktywnego rozwoju.  
@@ -517,3 +600,5 @@ Arsenazo III i Calmagite rozkładają się w świetle i w podwyższonej temperat
 *Reef Sentinel Lab – Open-source aquarium controller*  
 *reef-sentinel.com | github.com/reef-sentinel*  
 *Ostatnia aktualizacja: 2026-03-06*
+
+

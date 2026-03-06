@@ -1,3 +1,101 @@
+## English (Primary)
+
+# Reef Sentinel - Build Guide
+## Module 1: Sentinel Hub
+
+Version: 1.0
+Date: 2026-03-06
+Estimated build time: 2-3h
+Difficulty: Basic
+
+---
+
+## Purpose
+
+Sentinel Hub is the system coordinator.
+It provides AP+STA networking, MQTT integration, and status display.
+
+---
+
+## Required Hardware
+- ESP32 DevKit
+- LM2596 converter
+- 12V power supply
+- OLED (SSD1306 I2C)
+- SD reader (optional)
+- breadboard + jumper wires
+- USB cable for flashing
+- multimeter
+
+---
+
+## Safety First
+- Never connect USB and LM2596 power simultaneously.
+- Tune LM2596 to 5.0V before connecting ESP32.
+- Perform continuity checks before first power-on.
+
+---
+
+## Build Steps
+
+### 1. Power stage
+1. Connect 12V supply to LM2596 input.
+2. Measure LM2596 output and set to 5.0V ±0.1V.
+3. Power off before wiring ESP32.
+
+### 2. ESP32 wiring
+- LM2596 OUT+ -> VIN
+- LM2596 OUT- -> GND
+
+### 3. OLED wiring
+- SDA -> GPIO21
+- SCL -> GPIO22
+- VCC -> 3V3
+- GND -> GND
+
+### 4. SD wiring (optional)
+- CS GPIO5, SCK GPIO18, MISO GPIO19, MOSI GPIO23
+- VCC 3V3, GND common
+
+### 5. Verification
+- continuity checks for GND paths
+- no short between power rails
+- stable 5V on VIN and 3V3 rail present
+
+---
+
+## Firmware (ESPHome)
+- Flash Hub YAML via USB with external 12V disconnected.
+- Enable WiFi AP SentinelHub and connect to home network as STA.
+- Verify MQTT availability and OLED output.
+
+---
+
+## Home Assistant Validation
+- Add detected ESPHome device
+- confirm status/wifi/uptime entities
+- validate 
+eef/# topic flow in MQTT tools
+
+---
+
+## Troubleshooting
+- No boot: check VIN voltage and USB data cable
+- No OLED: verify I2C address (0x3C/0x3D) and SDA/SCL mapping
+- No SD: verify FAT32 and SPI wiring
+- WiFi issues: ensure 2.4GHz credentials
+
+---
+
+## Done Criteria
+- stable boot from LM2596 power
+- AP visible (SentinelHub)
+- HA integration active
+- MQTT path operational
+
+---
+
+## Polish (PL)
 # Reef Sentinel – BUILD GUIDE
 ## Module 1: Sentinel Hub (Koordynator WiFi)
 
@@ -13,7 +111,7 @@
 
 ### Co ten moduł robi
 
-Sentinel Hub to „mózg" całego systemu. Sam w sobie nie mierzy niczego w akwarium –
+Sentinel Hub to "mózg" całego systemu. Sam w sobie nie mierzy niczego w akwarium –
 jego rola to:
 
 - Tworzenie sieci WiFi (hotspot `SentinelHub`) do której łączą się pozostałe moduły
@@ -792,3 +890,5 @@ Po ukończeniu Sentinel Hub:
 *Reef Sentinel – Open-source aquarium controller*  
 *reef-sentinel.com | github.com/reef-sentinel*  
 *Ostatnia aktualizacja: 2026-03-06*
+
+

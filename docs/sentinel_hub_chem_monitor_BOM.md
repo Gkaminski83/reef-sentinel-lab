@@ -1,3 +1,92 @@
+## English (Primary)
+
+# Reef Sentinel - BOM
+## Module 1 (Sentinel Hub) + Module 2 (Sentinel Chem/Monitor)
+
+Version: 1.0
+Date: 2026-03-06
+
+---
+
+## Summary
+
+This BOM lists:
+- components already owned,
+- missing parts,
+- purchase priority,
+- estimated cost to complete the Phase 1 stack.
+
+---
+
+## Module 1: Sentinel Hub
+
+Functions:
+- AP+STA WiFi coordination
+- MQTT brokering and data aggregation
+- OLED status output
+- optional SD logging
+
+Main parts:
+- ESP32 DevKit
+- 12V supply + LM2596
+- OLED display
+- SD reader + optional microSD
+- breadboard and Dupont wiring
+
+Status:
+- Module 1 is effectively build-ready.
+
+---
+
+## Module 2: Sentinel Chem/Monitor
+
+Functions:
+- KH titration workflow
+- pH continuous measurement
+- EC/salinity and 3-point temperature monitoring
+- pumps and stirrer control
+
+Main parts:
+- ESP32 DevKit
+- 12V supply + LM2596
+- pH kit, EC sensor, DS18B20 probes
+- 5x MOSFET channels
+- 4x 12V peristaltic pumps
+- stirrer motor + magnet/stir bar assembly
+- fluid containers and tubing
+
+---
+
+## GPIO Allocation
+
+### Hub
+- I2C OLED: GPIO21/22
+- SPI SD: GPIO5/18/19/23
+
+### Chem/Monitor
+- pH analog: GPIO34
+- EC analog: GPIO32
+- DS18B20 bus: GPIO33
+- Pumps: GPIO15/2/4/16
+- Stirrer PWM: GPIO25
+
+---
+
+## Purchase Priority
+- Critical: electrical completion items (remaining MOSFETs, pull-up resistor, filtering capacitors)
+- High: mechanical/fluidics completion (stirrer assembly, canisters, chamber parts, reagent)
+- Optional: convenience/storage extras
+
+---
+
+## Safety Notes
+- Set LM2596 to exact 5.0V before ESP32 connection.
+- Use common ground between ESP32 and all MOSFET boards.
+- Handle HCl with appropriate PPE.
+
+---
+
+## Polish (PL)
 # Reef Sentinel – Bill of Materials
 ## Module 1: Sentinel Hub + Module 2: Sentinel Chem/Monitor
 
@@ -322,3 +411,5 @@ PRZED PIERWSZYM WŁĄCZENIEM – CHECKLIST:
 *Reef Sentinel – Open-source aquarium controller*  
 *reef-sentinel.com | github.com/reef-sentinel*  
 *Ostatnia aktualizacja: 2026-03-06*
+
+

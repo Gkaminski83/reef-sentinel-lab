@@ -1,3 +1,92 @@
+## English (Primary)
+
+# Reef Sentinel Lab - Build Guide
+## Module 4: Sentinel View (Touch Display)
+
+Version: 1.0
+Date: 2026-03-06
+Status: Phase 2 (Q2 2026)
+
+---
+
+## Purpose
+
+Sentinel View is the local touchscreen UI for live reef telemetry and manual actions.
+
+Core features:
+- live dashboard values (pH, KH, temperature, salinity)
+- trend charts
+- manual test triggers
+- alerts and configurable thresholds
+
+---
+
+## Hardware Architecture
+- Nextion NX8048P050-011C display
+- ESP32 bridge receiving MQTT and sending UART commands
+- LM2596 12V->5V shared rail
+- optional buzzer for alert sounds
+
+---
+
+## Wiring Summary
+- GPIO17 (ESP TX2) -> Nextion RX
+- GPIO16 (ESP RX2) <- Nextion TX
+- VIN/5V -> Nextion 5V
+- GND -> Nextion GND
+- optional buzzer on GPIO25
+
+---
+
+## Build Steps
+1. Calibrate LM2596 output to 5.0V
+2. Wire ESP32 and Nextion UART/power
+3. Flash ESPHome bridge firmware
+4. Build UI in Nextion Editor
+5. Upload .tft via UART or microSD
+6. Validate MQTT-driven updates on screen
+
+---
+
+## UI Structure
+Suggested pages:
+- Home
+- Charts
+- Tests
+- Settings
+- Alerts
+
+---
+
+## Firmware Role
+- subscribe to Hub/Chem MQTT topics
+- convert payloads to Nextion component commands
+- send commands with Nextion terminator bytes
+
+---
+
+## Mechanical Notes
+- 3D-printed enclosure sized for NX8048P050
+- magnetic base + angle-adjustable mount recommended
+
+---
+
+## Troubleshooting
+- no display: verify 5V rail and flashed UI
+- no updates: check UART TX/RX crossing and MQTT connectivity
+- instability: verify rail current headroom and update frequency throttling
+
+---
+
+## Done Criteria
+- display boots consistently
+- real-time values update from MQTT
+- touch navigation works
+- optional buzzer test works
+
+---
+
+## Polish (PL)
 # Reef Sentinel Lab – BUILD GUIDE
 ## Module 4: Sentinel View (Wyświetlacz dotykowy)
 
@@ -626,3 +715,5 @@ STATUS: ✅ Sentinel View gotowy!
 *Reef Sentinel Lab – Open-source aquarium controller*  
 *reef-sentinel.com | github.com/reef-sentinel*  
 *Ostatnia aktualizacja: 2026-03-06*
+
+

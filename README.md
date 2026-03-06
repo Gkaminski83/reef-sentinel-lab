@@ -1,3 +1,129 @@
+## English (Primary)
+
+<p align="center">
+  <img src="logo.png" alt="Reef Sentinel" width="180" />
+</p>
+
+<h1 align="center">Reef Sentinel LAB</h1>
+
+**Open-source reef aquarium controller. Automatic KH, Ca, and Mg. No vendor lock-in.**
+
+[![License: MIT](https://img.shields.io/badge/License--MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![ESPHome](https://img.shields.io/badge/Firmware-ESPHome-blue)](https://esphome.io)
+[![Home Assistant](https://img.shields.io/badge/Integration-Home%20Assistant-41BDF5)](https://www.home-assistant.io)
+[![Status](https://img.shields.io/badge/Status-Active%20Development-brightgreen)]()
+
+---
+
+## Why Reef Sentinel?
+
+Reef Sentinel LAB is built as a fully open platform for reef automation:
+- Hardware, firmware, and docs are public.
+- The system is local-first and cloud-optional.
+- Modular ESP32 architecture limits single points of failure.
+- Native Home Assistant integration via ESPHome API.
+
+---
+
+## What The System Does
+
+### Automated Chemistry (Big Three)
+- KH via automated HCl titration (Sentinel Chem)
+- pH continuous monitoring (Sentinel Chem)
+- Ca photometric testing (Sentinel Photometer, planned)
+- Mg photometric testing (Sentinel Photometer, planned)
+
+### 24/7 Monitoring
+- Three-point temperature monitoring (aquarium/sump/chamber)
+- EC/salinity monitoring
+
+### Key Design Choices
+- pH probe storage in RO water between cycles
+- Module-level independence with WiFi + MQTT communication
+- Home Assistant entities auto-discovered through ESPHome
+
+---
+
+## Module Overview
+
+1. Sentinel Hub (Module 1)
+- WiFi coordinator and MQTT broker
+- Data aggregation and cloud sync scheduling
+- OLED status view
+
+2. Sentinel Chem/Monitor (Module 2)
+- KH titration, pH monitoring, EC and temperature
+- Pump and stirrer control
+
+3. Sentinel Photometer (Module 3, Q3 2026)
+- Dual-channel photometry for Ca and Mg
+
+4. Sentinel View (Module 4, Q2 2026)
+- Nextion touchscreen local dashboard
+
+5. Sentinel Connector (Module 5, TBD)
+- External-controller bridge (Apex/GHL/Hydros)
+
+---
+
+## Technical Stack
+- MCU: ESP32-WROOM-32 per module
+- Firmware: ESPHome
+- Internal comms: WiFi + MQTT
+- Data format: JSON over MQTT
+- HA integration: native ESPHome API
+- Power: 12V DC with local LM2596 per module
+
+---
+
+## Build Order
+1. Build Sentinel Hub
+2. Build Sentinel Chem/Monitor (sensor phase)
+3. Extend Chem/Monitor with pumps and fluidics
+4. Integrate and validate on aquarium
+5. Add Sentinel View (optional)
+
+---
+
+## Documentation Index
+- docs/sentinel_hub_chem_monitor_BOM.md
+- docs/sentinel_view_BOM.md
+- docs/BUILD_GUIDE_sentinel_hub.md
+- docs/BUILD_GUIDE_sentinel_chem_monitor.md
+- docs/BUILD_GUIDE_sentinel_photometer.md
+- docs/BUILD_GUIDE_sentinel_view.md
+- docs/WIRING_DIAGRAM.md
+- firmware/sentinel_hub.yaml
+- firmware/sentinel_chem.yaml
+
+---
+
+## Safety
+- Set each LM2596 to exactly 5.0V before ESP32 connection.
+- Never power ESP32 from USB and LM2596 simultaneously.
+- Test fluidics with RO water before introducing HCl.
+- Use gloves and eye protection when handling acid.
+
+---
+
+## License Model
+- Hardware: CERN-OHL-P v2
+- Firmware: MIT
+- Documentation: CC BY 4.0
+- Trademark: Reef Sentinel name/logo protected
+
+---
+
+## Project Status (2026-03-06)
+- Sentinel Hub: build-ready
+- Sentinel Chem/Monitor: in active build
+- Sentinel Photometer: planned skeleton
+- Sentinel View: planned
+- PCB phase: planned
+
+---
+
+## Polish (PL)
 <p align="center">
   <img src="logo.png" alt="Reef Sentinel" width="180" />
 </p>
@@ -231,7 +357,7 @@ Q4 2026  ──  Sentinel Photometer v1.0 (stabilny)
 | Hardware (schematy, PCB, BOM) | CERN-OHL-P v2 (Permissive) |
 | Firmware (ESPHome YAML, kod) | MIT |
 | Dokumentacja | CC BY 4.0 |
-| Marka „Reef Sentinel" | ™ Trademark (chronione) |
+| Marka "Reef Sentinel" | ™ Trademark (chronione) |
 
 **Wolno Ci:**  
 ✅ Zbudować własne urządzenie (DIY)  
@@ -240,7 +366,7 @@ Q4 2026  ──  Sentinel Photometer v1.0 (stabilny)
 ✅ Tworzyć fork projektu  
 
 **Nie wolno:**  
-❌ Używać nazwy „Reef Sentinel" bez zgody  
+❌ Używać nazwy "Reef Sentinel" bez zgody  
 ❌ Używać logo projektu  
 
 ### Jak zarabiamy (jak Arduino, jak Prusa)
@@ -282,10 +408,10 @@ Kluczowe zasady bezpieczeństwa:
 ## Społeczność i wsparcie
 
 - 🌐 **Strona:** [reef-sentinel.com](https://reef-sentinel.com)
-- 💬 **Forum:** forum.reef-sentinel.com *(wkrótce)*
-- 📧 **Kontakt:** opensource@reefsentinel.pl
+- đź'¬ **Forum:** forum.reef-sentinel.com *(wkrótce)*
+- đź"§ **Kontakt:** opensource@reefsentinel.pl
 - 🐛 **Bugi:** GitHub Issues
-- 💡 **Propozycje:** GitHub Discussions
+- đź'ˇ **Propozycje:** GitHub Discussions
 
 ---
 
@@ -302,3 +428,5 @@ Projekt czerpie inspirację z:
 *Reef Sentinel Lab – Open-source aquarium controller*  
 *reef-sentinel.com | github.com/reef-sentinel*  
 *Last updated: 2026-03-06*
+
+

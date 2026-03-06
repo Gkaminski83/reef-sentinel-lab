@@ -1,3 +1,84 @@
+## English (Primary)
+
+# Sentinel View Display - Bill of Materials (BOM)
+
+Version: 2.0 (Nextion-based)
+Status: Phase 2 (Q2 2026)
+
+---
+
+## Design Baseline
+
+Current architecture uses Nextion NX8048P050-011C with ESP32 as a WiFi/UART bridge.
+Previous ESP32-S3 + SPI LCD concept is deprecated.
+
+---
+
+## Core Electronics
+
+### Main display
+- Nextion Intelligent Display NX8048P050-011C
+- 5.0", 800x480, capacitive touch
+- Built-in MCU/flash/RTC
+
+### Bridge controller
+- ESP32 DevKit (WROOM-32)
+- Handles MQTT subscription and UART commands to display
+
+### Power
+- LM2596 12V -> 5V converter
+- Shared 5V rail for Nextion + ESP32
+
+### Optional
+- Buzzer for audible alerts
+
+---
+
+## Wiring Summary
+- ESP32 GPIO17 (TX2) -> Nextion RX
+- ESP32 GPIO16 (RX2) <- Nextion TX
+- 5V -> Nextion 5V
+- GND -> Nextion GND
+
+---
+
+## Mechanical BOM
+- 3D-printed enclosure
+- Magnetic base (N52 magnets)
+- Ball joint/hinge for angle adjustment
+- M2.5 screws + inserts
+
+---
+
+## Tooling
+- Nextion Editor (free)
+- UI pages planned: Home, Charts, Tests, Settings, Alerts
+
+---
+
+## Cost Snapshot
+- Standard build: approx. 415 PLN total (incl. assembly/QC/packaging assumptions)
+- Pro variant: approx. 461 PLN total
+
+---
+
+## Procurement
+- Nextion: elty.pl
+- ESP32/LM2596/wiring: Botland/Kamami/AliExpress/Allegro
+- Enclosure: local print or Printuj3D
+
+---
+
+## Implementation Steps
+1. Stabilize Hub + Chem/Monitor deployment
+2. Source Nextion hardware
+3. Build UI in Nextion Editor
+4. Flash ESP32 bridge firmware
+5. Integrate and validate MQTT -> UART pipeline
+
+---
+
+## Polish (PL)
 # Sentinel View Display - Bill of Materials (BOM)
 
 ## Version: 2.0 (Nextion-based)
@@ -335,3 +416,5 @@ GND          ──→ GND (pin 3)
 *Reef Sentinel – Open-source aquarium controller*  
 *reef-sentinel.com | github.com/reef-sentinel*  
 *Ostatnia aktualizacja: 2026-03-06*
+
+

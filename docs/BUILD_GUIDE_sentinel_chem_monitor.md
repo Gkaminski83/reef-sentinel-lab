@@ -1,3 +1,95 @@
+## English (Primary)
+
+# Reef Sentinel Lab - Build Guide
+## Module 2: Sentinel Chem + Sentinel Monitor
+
+Version: 1.0
+Date: 2026-03-06
+Estimated build time: 3-5h in phases
+Difficulty: Intermediate
+
+---
+
+## Purpose
+
+Single ESP32 module combining:
+- Monitor role: 3x temperature + EC/salinity
+- Chem role: pH + KH automation with pumps and stirrer
+
+---
+
+## Build Phasing
+
+### Phase A (sensors + firmware baseline)
+1. Power setup and LM2596 calibration
+2. DS18B20 bus wiring with 4.7k pull-up
+3. EC analog wiring with filtering
+4. pH analog wiring with filtering
+5. ESPHome flash and baseline sensor validation
+
+### Phase B (automation mechanics)
+1. Add MOSFET channels and 12V pump wiring
+2. Add stirrer motor (PWM)
+3. Build chamber and fluid paths
+4. Calibrate pumps and execute RO-only dry runs
+5. Move to HCl chemistry after full validation
+
+---
+
+## Critical Wiring
+- pH AO -> GPIO34
+- EC AO -> GPIO32
+- DS18B20 DATA -> GPIO33 + 4.7k to 3V3
+- Pump GPIOs: 15 / 2 / 4 / 16
+- Stirrer PWM: GPIO25
+
+Critical control rule:
+- ESP32 GND must be common with all MOSFET COM/GND lines.
+
+---
+
+## Safety Rules
+- No USB + LM2596 dual power to ESP32.
+- Validate LM2596 at 5.0V before any logic wiring.
+- Test all fluid paths with RO water before acid.
+- Use gloves and eye protection with HCl.
+
+---
+
+## Firmware Scope
+- MQTT client to Sentinel Hub broker
+- sensor exposure (temp, EC raw, pH raw)
+- pump switches (safe default OFF)
+- stirrer PWM/fan abstraction
+
+---
+
+## Calibration Scope
+- pH two-point calibration (pH 7 + pH 4)
+- EC alignment against known salinity reference
+- pump flow calibration (ml/s per pump)
+
+---
+
+## Dry-Run Validation
+- run full cycle with RO water only
+- verify flow direction for each pump
+- verify chamber draining/filling behavior
+- verify stirrer coupling and stability
+- verify no leaks under continuous operation
+
+---
+
+## Done Criteria
+- all sensors stable in HA
+- all pumps controllable and mapped correctly
+- stirrer functional
+- sequence test completed with no leaks
+- system ready for first controlled KH titration
+
+---
+
+## Polish (PL)
 # Reef Sentinel Lab – BUILD GUIDE
 ## Module 2: Sentinel Chem + Sentinel Monitor
 
@@ -165,7 +257,7 @@ Wszystkie trzy podłączone do **jednego pinu GPIO33** – protokół 1-Wire poz
 
 ### Co to jest rezystor pull-up 4.7kΩ i dlaczego jest konieczny?
 
-Protokół 1-Wire wymaga żeby linia DATA była „podciągnięta" do VCC przez rezystor.
+Protokół 1-Wire wymaga żeby linia DATA była "podciągnięta" do VCC przez rezystor.
 Bez niego sonda nie odpowiada lub daje losowe odczyty.
 DFRobot Gravity adapter ma rezystor 10kΩ – za duży dla DS18B20. Dlatego potrzebny jest osobny rezystor 4.7kΩ.
 
@@ -374,7 +466,7 @@ Zasilacz 12V (–) ───→ MOSFET [OUT–] ──→ (–) Pompka
 ┌─────────────────────────────────────────────────────────┐
 │  GND ESP32  MUSI być połączony z GND/COM każdego MOSFET │
 │                                                         │
-│  Bez tego: ESP32 i MOSFET „nie rozumieją się"           │
+│  Bez tego: ESP32 i MOSFET "nie rozumieją się"           │
 │  → pompki nie reagują na sygnał                         │
 │  → możliwe uszkodzenie ESP32                            │
 │                                                         │
@@ -466,7 +558,7 @@ Podczas titracji KH próbka musi być mieszana, żeby kwas HCl równomiernie rea
 
 1. Wymieszaj klej epoksydowy (proporcje wg instrukcji, zwykle 1:1)
 2. Nanieś klej na oś silnika lub na specjalny krążek
-3. Przyklej dwa magnesy **biegunami naprzeciwlegle** (N i S po przeciwnych stronach osi) – to tworzy pole magnetyczne które „ciągnie" stir bar
+3. Przyklej dwa magnesy **biegunami naprzeciwlegle** (N i S po przeciwnych stronach osi) – to tworzy pole magnetyczne które "ciągnie" stir bar
 4. Odczekaj czas utwardzania kleju wg instrukcji (zazwyczaj 24h dla pełnej wytrzymałości, 30 min wstępne)
 5. Sprawdź czy magnesy trzymają się pewnie – stir bar będzie się kręcił z dużą prędkością
 
@@ -1090,3 +1182,5 @@ Po zakończeniu Modułu 2:
 *Reef Sentinel Lab – Open-source aquarium controller*  
 *reef-sentinel.com | github.com/reef-sentinel*  
 *Ostatnia aktualizacja: 2026-03-06*
+
+
