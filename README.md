@@ -15,7 +15,7 @@
 
 ## Dlaczego Reef Sentinel?
 
-Pamiętasz **Reef Factory**? Urządzenia za 2500–6000 zł. Upadłość w 2024. Jeśli dystrybutorzy wyłączą serwery tysiące akwarystów zostanie z cegłami zamiast kontrolerów.
+Pamiętasz **Reef Factory**? Upadłość w 2024. Jeśli dystrybutorzy wyłączą serwery tysiące akwarystów zostanie z cegłami zamiast kontrolerów.
 
 **Z Reef Sentinel to się nie może zdarzyć.**
 
@@ -51,7 +51,7 @@ Cały kod, schematy i dokumentacja są publiczne. Nawet jeśli projekt przestani
 
 ### Triki które wyróżniają ten projekt
 
-**Sonda pH w wodzie RO** – między pomiarami sonda przechowywana jest w wodzie RO zamiast w wodzie morskiej. Żywotność elektrody: **18–36 miesięcy** zamiast 4–6 miesięcy. Koszt eksploatacji: ~20 zł/rok zamiast ~120 zł/rok.
+**Sonda pH w wodzie RO** – między pomiarami sonda przechowywana jest w wodzie RO zamiast w wodzie morskiej. Żywotność elektrody: **18–36 miesięcy** zamiast 4–6 miesięcy.
 
 **Modularność** – każdy moduł to niezależny ESP32 z własnym firmware. Awaria Sentinel Chem/Monitor nie wpływa na Sentinel View i odwrotnie. Sentinel Hub pełni rolę koordynatora – jego awaria wstrzymuje agregację danych, ale moduły pomiarowe kontynuują pracę lokalnie.
 
@@ -114,19 +114,15 @@ Cały kod, schematy i dokumentacja są publiczne. Nawet jeśli projekt przestani
 ### Module 1 – Sentinel Hub ✅ Gotowy do budowy
 WiFi koordynator całego systemu. Tworzy sieć `SentinelHub` (10.42.0.1), zbiera dane ze wszystkich modułów, synchronizuje z reef-sentinel.com co 15 minut.
 
-**Komponenty:** ESP32 + LM2596 + OLED 0.96" + SD card reader  
-**Koszt:** ~102–117 zł
+**Komponenty:** ESP32 + LM2596 + OLED 0.96" + SD card reader
 
 ### Module 2 – Sentinel Chem/Monitor ⚠️ 60% gotowy
 Automatyczna titracja KH, monitoring pH 24/7, temperatura × 3, zasolenie. Fizycznie jeden ESP32, marketingowo dwa produkty.
 
-**Komponenty:** ESP32 + LM2596 + DFRobot pH V2 + EC sensor + DS18B20 × 3 + MOSFET × 5 + pompki × 4 + mieszadełko magnetyczne  
-**Koszt:** ~450 zł
+**Komponenty:** ESP32 + LM2596 + DFRobot pH V2 + EC sensor + DS18B20 × 3 + MOSFET × 5 + pompki × 4 + mieszadełko magnetyczne
 
 ### Module 3 – Sentinel Photometer ⏸️ Q3 2026
 Fotometryczny pomiar Ca i Mg. 2-kanałowy: LED 650nm (Ca, arsenazo III) + LED 520nm (Mg, calmagite). ADS1115 16-bit ADC dla precyzji.
-
-**Planowany koszt:** ~400 zł (+60 zł/50 testów reagenty DIY)
 
 ### Module 4 – Sentinel View ⏸️ Q2 2026
 Dotykowy panel wyświetlający dane w czasie rzeczywistym. Nextion NX8048P050-011C (5.0", 800×480, własny MCU 200MHz, 120MB flash). Połączenie przez UART – tylko 4 przewody.
@@ -134,7 +130,7 @@ Dotykowy panel wyświetlający dane w czasie rzeczywistym. Nextion NX8048P050-01
 ### Module 5 – Sentinel Connector ⏸️ TBD
 Moduł dla właścicieli istniejącego sprzętu (Neptune Apex, GHL ProfiLux, Hydros i in.). Działa niezależnie od pozostałych modułów Reef Sentinel Lab – nie wymaga Sentinel Hub. Łączy dane z zewnętrznego kontrolera z reef-sentinel.com i Home Assistant, dodając automatyczną chemię (KH, Ca, Mg) bez wymiany całego systemu.
 
-**Przypadek użycia:** masz Apex za 3000 zł i nie chcesz go wyrzucać – Sentinel Connector dodaje automatyczny pomiar KH/Ca/Mg jako uzupełnienie.
+**Przypadek użycia:** masz Apex i nie chcesz go wyrzucać – Sentinel Connector dodaje automatyczny pomiar KH/Ca/Mg jako uzupełnienie.
 
 ---
 
@@ -161,26 +157,26 @@ Moduł dla właścicieli istniejącego sprzętu (Neptune Apex, GHL ProfiLux, Hyd
 
 - Home Assistant (opcjonalnie, ale zalecane)
 - ESPHome (add-on do HA lub standalone)
-- Konto na reef-sentinel.com (3 miesiące gratis, następnie plan płatny)
+- Konto na reef-sentinel.com
 - Multimetr (do ustawienia LM2596 na 5.0V – obowiązkowe!)
 
 ### Kolejność budowy
 
 ```
 Krok 1 ── Sentinel Hub (Module 1)
-           └── Czas: 2–3h | Koszt: ~117 zł | Trudność: ⭐⭐☆☆☆
+           └── Czas: 2–3h | Trudność: ⭐⭐☆☆☆
 
 Krok 2 ── Sentinel Chem/Monitor (Module 2) – Faza A (sensory)
-           └── Czas: 2–3h | Koszt: ~200 zł | Trudność: ⭐⭐⭐☆☆
+           └── Czas: 2–3h | Trudność: ⭐⭐⭐☆☆
 
 Krok 3 ── Sentinel Chem/Monitor (Module 2) – Faza B (pompki + mechanika)
-           └── Czas: 3–4h | Koszt: ~250 zł | Trudność: ⭐⭐⭐☆☆
+           └── Czas: 3–4h | Trudność: ⭐⭐⭐☆☆
 
 Krok 4 ── Integracja i testy na akwarium
            └── Czas: 1–2h
 
 Krok 5 ── Sentinel View (Module 4) – opcjonalny
-           └── Czas: 2–3h + 1–2 dni UI | Koszt: ~365 zł | Trudność: ⭐⭐☆☆☆
+           └── Czas: 2–3h + 1–2 dni UI | Trudność: ⭐⭐☆☆☆
 ```
 
 ### Dokumentacja
