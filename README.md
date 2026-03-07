@@ -240,6 +240,7 @@ Cały kod, schematy i dokumentacja są publiczne. Nawet jeśli projekt przestani
 
 ### Module 1 – Sentinel Hub ✅ Gotowy do budowy
 WiFi koordynator całego systemu. Tworzy sieć `SentinelHub` (10.42.0.1), zbiera dane ze wszystkich modułów, synchronizuje z reef-sentinel.com co 15 minut.
+Panel lokalny Huba: `http://reef-sentinel.local` (fallback: `http://10.42.0.1`).
 
 **Komponenty:** ESP32 + LM2596 + OLED 0.96" + SD card reader
 

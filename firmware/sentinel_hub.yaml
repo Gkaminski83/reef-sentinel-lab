@@ -9,7 +9,7 @@
 # ============================================================
 
 esphome:
-  name: sentinel-hub
+  name: reef-sentinel
   build_path: C:/esphome-build/hub
   friendly_name: "Sentinel Hub"
   comment: "Reef Sentinel Lab - Module 1 / Direct HTTP bridge"
@@ -37,9 +37,9 @@ api:
     key: !secret api_encryption_key
 
 wifi:
-  # STA - home network (internet + Home Assistant)
-  ssid: !secret wifi_home_ssid
-  password: !secret wifi_home_password
+  # STA provisioning:
+  # User enters home SSID/password via captive portal on first boot.
+  # Credentials are then stored in flash by ESPHome.
 
   # AP - local network for modules
   ap:
@@ -51,6 +51,7 @@ wifi:
       subnet: 255.255.255.0
 
   power_save_mode: none
+  reboot_timeout: 0s
 
 captive_portal:
 

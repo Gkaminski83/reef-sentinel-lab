@@ -533,7 +533,7 @@ Utwórz nowe urządzenie w ESPHome i wklej poniższy config:
 
 ```yaml
 esphome:
-  name: sentinel-hub
+  name: reef-sentinel
   friendly_name: "Sentinel Hub"
 
 esp32:
@@ -554,21 +554,21 @@ api:
 ota:
   password: !secret ota_password
 
-# WiFi - dual mode: AP (dla modułów) + STA (do domu)
+# WiFi - AP (dla modolow) + provisioning STA przez captive portal
 wifi:
-  # Połączenie z Twoją siecią domową
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
-
   # Hotspot dla modułów Reef Sentinel
   ap:
     ssid: "SentinelHub"
     password: "reef1234"
+    manual_ip:
+      static_ip: 10.42.0.1
+      gateway: 10.42.0.1
+      subnet: 255.255.255.0
 
-  # Jeśli brak połączenia z domową siecią - AP działa zawsze
-  ap_timeout: 30s
+  power_save_mode: none
+  reboot_timeout: 0s
 
-# Portal konfiguracyjny (gdy brak WiFi)
+# Portal konfiguracyjny (pierwsze uruchomienie)
 captive_portal:
 
 # Lokalny agregator danych modułów (bez MQTT, bez HA)
@@ -671,13 +671,15 @@ ota_password: "dowolneHasloOTA"
 [I][api:000]: ESPHome API connected to 127.0.0.1
 ```
 
-### Krok 6.4 – Test bezprzewodowy
+### Krok 6.4 - Test bezprzewodowy
 
-1. Odłącz USB od komputera
-2. Włącz zasilacz 12V
-3. ESP32 bootuje z zasilania LM2596
-4. Na telefonie sprawdź sieci WiFi – powinna pojawić się sieć **SentinelHub**
-5. Na OLED powinien pojawić się adres IP
+1. Odlacz USB od komputera.
+2. Wlacz zasilacz 12V.
+3. ESP32 uruchomi AP `SentinelHub`.
+4. Polacz telefon/laptop z `SentinelHub`.
+5. Otworz `http://reef-sentinel.local` (fallback: `http://10.42.0.1`).
+6. W captive portal wpisz SSID/haslo swojej sieci domowej i zapisz.
+7. Hub dolaczy do sieci domowej jako STA, a AP `SentinelHub` pozostanie dla modulow.
 
 ---
 
@@ -692,7 +694,7 @@ Sentinel Hub nie ma wlasnych sond, ale od tej wersji pelni panel sterowania kali
 **7.2 Czas systemowy (NTP)** - automatycznie.
 
 **7.3 Kalibracja pH modulu Chem z poziomu Hub**
-1. Wejdz na `http://10.42.0.1` (web_server Hub).
+1. Wejdz na `http://reef-sentinel.local` (fallback: `http://10.42.0.1`).
 2. Ustaw `chem_ph_cal_liquid1_ph` i `chem_ph_cal_liquid2_ph` na wartosci uzytych buforow (dowolne 2 wartosci, np. 4.01 i 7.00).
 3. Zanurz sonde w plynie #1 i uzyj przycisku `Chem pH Cal Capture Liquid1`.
 4. Oplucz sonde, zanurz w plynie #2 i uzyj `Chem pH Cal Capture Liquid2`.
