@@ -57,7 +57,7 @@ Critical control rule:
 ---
 
 ## Firmware Scope
-- MQTT client to Sentinel Hub broker
+- ESPHome API client to Home Assistant
 - sensor exposure (temp, EC raw, pH raw)
 - pump switches (safe default OFF)
 - stirrer PWM/fan abstraction
@@ -710,11 +710,10 @@ wifi:
   ssid: "SentinelHub"
   password: "reef1234"
 
-mqtt:
-  broker: 10.42.0.1      # Adres IP Sentinel Hub (AP)
-  port: 1883
-  topic_prefix: reef/chem
-  discovery: true
+# MQTT removed in no-broker architecture
+# Data path: HTTP REST (Chem -> Hub web_server)
+# Brak lokalnego broker/client bus na module.
+# Home Assistant jest opcjonalny i nie jest wymagany do pracy modułu.
 
 # ──────────────────────────────────────────
 # SENTINEL MONITOR – czujniki pasywne
@@ -848,7 +847,7 @@ button:
 5. W logach po boocie:
 ```
 [I][wifi:290]: Connected to SentinelHub
-[I][mqtt:287]: MQTT connected to 10.42.0.1
+[I][api:000]: ESPHome API connected to 10.42.0.1
 [I][dallas:084]: Found Dallas sensors: 3
 ```
 
@@ -870,51 +869,22 @@ Każdy sensor ma unikalny adres. Żeby wiedzieć który to który:
 
 ## ETAP 9 – KALIBRACJA
 
-### 9.1 Kalibracja pH (DFRobot Gravity V2)
+### 9.1 Kalibracja pH (2-punktowa z poziomu Sentinel Hub)
 
-pH sonda wymaga kalibracji dwupunktowej. DFRobot V2 ma wbudowany układ kalibracji.
+Kalibracja pH jest wykonywana bezposrednio z Sentinel Hub (web panel), bez recznego liczenia slope/intercept.
 
 **Potrzebujesz:**
-- Bufor pH 4.0 (żółty, zazwyczaj w zestawie)
-- Bufor pH 7.0 (zielony, zazwyczaj w zestawie)
-- Woda RO do płukania między buforami
+- Dwa plyny kalibracyjne o znanych wartosciach pH (dowolna para, np. 4.01 i 7.00 albo 6.86 i 9.18)
+- Woda RO do plukania sondy
 
 **Procedura:**
+1. Wejdz na `http://10.42.0.1` (Hub web panel).
+2. Ustaw `chem_ph_cal_liquid1_ph` i `chem_ph_cal_liquid2_ph` zgodnie z uzytymi buforami.
+3. Zanurz sonde w plynie #1, odczekaj stabilizacje i kliknij `Chem pH Cal Capture Liquid1`.
+4. Oplucz sonde RO, zanurz w plynie #2 i kliknij `Chem pH Cal Capture Liquid2`.
+5. Kliknij `Apply Chem Settings`.
 
-```
-Krok 1: Zanurz sondę w buforze pH 7.0
-         Poczekaj 30s na stabilizację
-         Zanotuj surowe napięcie z GPIO34 (widoczne w HA jako "pH Raw Voltage")
-         → np. 1.738V przy pH 7.0
-
-Krok 2: Opłucz sondę wodą RO (delikatnie, bez tarcia)
-         Zanurz w buforze pH 4.0
-         Poczekaj 30s
-         Zanotuj napięcie
-         → np. 2.031V przy pH 4.0
-
-Krok 3: Oblicz współczynniki kalibracji:
-         slope    = (pH4.0 – pH7.0) / (V_pH4 – V_pH7)
-                  = (4.0 – 7.0) / (2.031 – 1.738)
-                  = -3.0 / 0.293
-                  = –10.24 pH/V
-
-         intercept = pH7.0 – slope × V_pH7
-                   = 7.0 – (–10.24 × 1.738)
-                   = 7.0 + 17.80
-                   = 24.80
-
-Krok 4: Dodaj przelicznik do YAML ESPHome:
-         - platform: adc
-           pin: GPIO34
-           name: "pH"
-           filters:
-             - multiply: 3.3
-             - lambda: return -10.24 * x + 24.80;
-```
-
-> Kalibrację powtarzaj co 4–6 tygodni lub gdy odczyty wydają się błędne.
-> Nowe bufory kupuj tylko od sprawdzonych dostawców – stare lub zanieczyszczone bufory dają złą kalibrację.
+W firmware Chem zapisywane sa dwa punkty napiecie->pH oraz dwa pH buforow, a wynik pH jest liczony liniowo miedzy tymi punktami.
 
 ### 9.2 Kalibracja EC (zasolenie)
 
@@ -940,31 +910,31 @@ Krok 4: Dodaj przelicznik w YAML:
 > EC nie wymaga częstej rekalibracji – raz po montażu wystarczy.
 > Sprawdzaj raz na miesiąc refraktometrem czy wartości się zgadzają.
 
-### 9.3 Kalibracja pompek (objętościowa)
+### 9.3 Kalibracja pompek (objętościowa z poziomu Hub)
 
-Przed titrację KH musisz wiedzieć ile ml pompka pobiera na sekundę.
+Kalibrację pomp wykonujesz z panelu Hub (`http://10.42.0.1`).
 
-**Metoda:**
-```
-Krok 1: Podłącz wężyk pompki do pojemnika z wodą RO
-Krok 2: W HA włącz pompkę na DOKŁADNIE 10 sekund
-         (użyj automation lub przycisku z timerem)
-Krok 3: Zmierz zmierzoną objętość (strzykawka lub menzurka)
-         → np. 8.5ml w 10s = 0.85 ml/s
-Krok 4: Zanotuj dla każdej pompki osobno (różnią się!)
-Krok 5: Użyj tej wartości w algorytmie titracji
-```
+**Procedura:**
+1. Ustaw `chem_pump_cal_duration_s` (np. 30 s).
+2. Uruchamiaj kolejno przyciski:
+   - `Chem Pump Cal Run Sample`
+   - `Chem Pump Cal Run HCL`
+   - `Chem Pump Cal Run Waste`
+   - `Chem Pump Cal Run RO`
+3. Dla każdej pompy zmierz przetłoczoną objętość i policz realny przepływ.
+4. Dla pompy HCl ustaw `chem_pump_hcl_ml_per_pulse`.
+5. Kliknij `Apply Chem Settings`, aby zapisać wartości w Chem.
 
 **Tabela kalibracji pompek:**
 
-| Pompka | Rola | ml/10s | ml/s |
-|--------|------|--------|------|
+| Pompka | Rola | ml/30s (lub wg ustawionego czasu) | ml/s |
+|--------|------|------------------------------------|------|
 | #1 | Próbka | ___ | ___ |
 | #2 | HCl | ___ | ___ |
 | #3 | Odpad | ___ | ___ |
 | #4 | RO | ___ | ___ |
 
-> Wypełnij tabelę po zmierzeniu. Pompki perystaltyczne mogą różnić się o 10–20% między sobą.
+> Pompki perystaltyczne mogą różnić się wydajnością o 10-20%, dlatego kalibruj każdą osobno.
 
 ---
 
@@ -974,18 +944,17 @@ Zanim użyjesz HCl, przetestuj całą mechanikę z **wodą RO**.
 
 ### Test 10.1 – Test pojedynczej pompki
 
-W HA → Developer Tools → Services:
-```yaml
-service: switch.turn_on
-target:
-  entity_id: switch.pompka_1_probka
-```
+W Hub web panel (`http://10.42.0.1`) uruchom kolejno przyciski:
+- `Chem Pump Cal Run Sample`
+- `Chem Pump Cal Run HCL`
+- `Chem Pump Cal Run Waste`
+- `Chem Pump Cal Run RO`
 Obserwuj: czy pompka się kręci, czy wąż transportuje wodę, czy nie ma wycieków.
 Następnie wyłącz i powtórz dla każdej pompki.
 
 ### Test 10.2 – Test mieszadełka
 
-W HA → encja fan.mieszadelko → ustaw prędkość 50%.
+Uruchom test KH z Hub (`Start Test KH`) i obserwuj fazę mieszania.
 Obserwuj: czy stir bar się kręci w komorze, czy silnik nie grzeje się za mocno.
 
 ### Test 10.3 – Sekwencja testowa (bez chemii)
@@ -1123,8 +1092,8 @@ Przyczyna 1: Sentinel Hub nie nadaje sieci SentinelHub
 Przyczyna 2: Złe hasło w YAML
   → Hasło AP Sentinel Hub: reef1234
 
-Przyczyna 3: Zły adres brokera MQTT
-  → Broker jest na 10.42.0.1 (adres AP Sentinel Hub)
+Przyczyna 3: Problem integracji z Home Assistant
+  → Sprawdź `api_encryption_key` oraz status urządzenia w integracji ESPHome
 ```
 
 ---
@@ -1138,7 +1107,7 @@ FAZA A – SENSORY:
 ☐ DS18B20 × 3: wszystkie widoczne w HA z sensownymi wartościami
 ☐ EC sensor: widoczny w HA, reaguje na zmianę zasolenia
 ☐ pH sensor: skalibrowany (2-punktowo pH 4.0 + pH 7.0), stabilny odczyt
-☐ Sentinel Chem/Monitor widoczny w Sentinel Hub (MQTT)
+☐ Sentinel Chem/Monitor widoczny w Sentinel Hub (ESPHome API)
 
 FAZA B – MECHANIKA:
 ☐ MOSFET × 5: common ground podłączony
@@ -1182,5 +1151,3 @@ Po zakończeniu Modułu 2:
 *Reef Sentinel Lab – Open-source aquarium controller*  
 *reef-sentinel.com | github.com/reef-sentinel*  
 *Ostatnia aktualizacja: 2026-03-06*
-
-

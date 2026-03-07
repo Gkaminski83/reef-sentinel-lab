@@ -440,8 +440,8 @@ MOSFET #5 – Mieszadełko (STIRRER PWM):
    │  WiFi AP        │        │  GPIO16 → MOSFET#4 SIG  │
    │  SentinelHub    │        │                          │
    │  10.42.0.1      │        │  WiFi Client             │
-   │  MQTT :1883     │◄──────►│  → SentinelHub           │
-   └─────────────────┘  WiFi  │  MQTT → 10.42.0.1        │
+   │  ESPHome API       │◄──────►│  → SentinelHub + Home Assistant │
+   └─────────────────┘  WiFi  │  Encje przez ESPHome API       │
                               └──────────────────────────┘
                                          │
                          ┌───────────────┼───────────────┐
@@ -622,12 +622,12 @@ SILNIK STIRRER
 ☐ Pompka #2 (HCl): bez HCl podczas testu (najpierw woda RO)
 ```
 
-### WiFi / MQTT
+### WiFi / ESPHome API
 
 ```
 ☐ ESP32 Hub: firmware wgrany, AP SentinelHub widoczny w sieci
 ☐ ESP32 Chem: firmware wgrany, łączy się z SentinelHub
-☐ MQTT topics widoczne w HA:
+☐ Home Assistant entities widoczne w HA:
    reef/chem/temp/aquarium
    reef/chem/temp/sump
    reef/chem/ph/value
@@ -701,5 +701,4 @@ SILNIK STIRRER
 *Reef Sentinel Lab – Open-source aquarium controller*  
 *reef-sentinel.com | github.com/reef-sentinel*  
 *Ostatnia aktualizacja: 2026-03-06*
-
 

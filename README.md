@@ -21,7 +21,7 @@ Reef Sentinel LAB is built as a fully open platform for reef automation:
 - Hardware, firmware, and docs are public.
 - The system is local-first and cloud-optional.
 - Modular ESP32 architecture limits single points of failure.
-- Native Home Assistant integration via ESPHome API.
+- Direct module-to-Hub communication (no MQTT broker, no HA required).
 
 ---
 
@@ -39,17 +39,18 @@ Reef Sentinel LAB is built as a fully open platform for reef automation:
 
 ### Key Design Choices
 - pH probe storage in RO water between cycles
-- Module-level independence with WiFi + MQTT communication
-- Home Assistant entities auto-discovered through ESPHome
+- Direct WiFi communication: modules push data to Hub over HTTP
+- Home Assistant is optional (ESPHome API still available)
 
 ---
 
 ## Module Overview
 
 1. Sentinel Hub (Module 1)
-- WiFi coordinator and MQTT broker
+- WiFi coordinator and HTTP data aggregator
 - Data aggregation and cloud sync scheduling
 - OLED status view
+- Remote calibration/control panel for Chem module (pH and pumps)
 
 2. Sentinel Chem/Monitor (Module 2)
 - KH titration, pH monitoring, EC and temperature
@@ -69,9 +70,9 @@ Reef Sentinel LAB is built as a fully open platform for reef automation:
 ## Technical Stack
 - MCU: ESP32-WROOM-32 per module
 - Firmware: ESPHome
-- Internal comms: WiFi + MQTT
-- Data format: JSON over MQTT
-- HA integration: native ESPHome API
+- Internal comms: WiFi + HTTP (module -> Hub)
+- Data format: Hub `web_server` REST endpoints (`/number/.../set`, `/button/.../press`)
+- HA integration: optional, via native ESPHome API
 - Power: 12V DC with local LM2596 per module
 
 ---
@@ -181,7 +182,7 @@ Cały kod, schematy i dokumentacja są publiczne. Nawet jeśli projekt przestani
 
 **Modularność** – każdy moduł to niezależny ESP32 z własnym firmware. Awaria Sentinel Chem/Monitor nie wpływa na Sentinel View i odwrotnie. Sentinel Hub pełni rolę koordynatora – jego awaria wstrzymuje agregację danych, ale moduły pomiarowe kontynuują pracę lokalnie.
 
-**Integracja HA** – przez ESPHome API. Po dodaniu urządzenia w Home Assistant encje sensorów pojawiają się automatycznie – nie trzeba ręcznie definiować każdego czujnika w `configuration.yaml`.
+**Integracja HA (opcjonalna)** – przez ESPHome API. System działa bez Home Assistant, a HA można dodać później jako dodatkowy dashboard/automatyzacje.
 
 ---
 
@@ -204,7 +205,7 @@ Cały kod, schematy i dokumentacja są publiczne. Nawet jeśli projekt przestani
            │     (Module 1)           │
            │  IP: 10.42.0.1           │
            │  AP: SentinelHub         │
-           │  MQTT Broker: :1883      │
+           │  HTTP API aggregator    │
            │  OLED status display     │
            └────┬──────┬──────┬───────┘
          WiFi  │      │      │  WiFi
@@ -266,9 +267,9 @@ Moduł dla właścicieli istniejącego sprzętu (Neptune Apex, GHL ProfiLux, Hyd
 |--|---------|
 | Mikrokontroler | ESP32-WROOM-32 (każdy moduł) |
 | Firmware | ESPHome |
-| Komunikacja wewnętrzna | WiFi 2.4GHz + MQTT |
-| Protokół danych | JSON over MQTT |
-| Integracja HA | Natywna (ESPHome API) |
+| Komunikacja wewnętrzna | WiFi 2.4GHz + HTTP (moduły -> Hub) |
+| Protokół danych | REST endpointy `web_server` ESPHome |
+| Integracja HA | Opcjonalna (ESPHome API) |
 | Cloud | reef-sentinel.com (REST API) |
 | Zasilanie | 12V DC / 5A |
 | Konwersja napięcia | LM2596 (12V→5V, per moduł) |
@@ -428,5 +429,3 @@ Projekt czerpie inspirację z:
 *Reef Sentinel Lab – Open-source aquarium controller*  
 *reef-sentinel.com | github.com/reef-sentinel*  
 *Last updated: 2026-03-06*
-
-

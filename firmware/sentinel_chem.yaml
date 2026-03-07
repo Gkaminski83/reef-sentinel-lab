@@ -20,7 +20,7 @@
 #   Monitoring pH 24/7 (sonda przechowywana w RO między pomiarami)
 #   Temperatura × 3 (akwarium, sump, komora)
 #   EC / Zasolenie (ciągły, z kompensacją temperatury)
-#   Publikacja danych przez MQTT → Sentinel Hub (10.42.0.1)
+#   Publikacja danych przez ESPHome API → Sentinel Hub (10.42.0.1)
 # ============================================================
 
 # ────────────────────────────────────────────────────────────
@@ -28,6 +28,7 @@
 # ────────────────────────────────────────────────────────────
 esphome:
   name: sentinel-chem
+  build_path: C:/esphome-build/chem
   friendly_name: "Sentinel Chem/Monitor"
   comment: "Reef Sentinel Lab – Module 2 / Chemistry & Monitoring"
   on_boot:
@@ -80,24 +81,13 @@ wifi:
   power_save_mode: none
   reboot_timeout: 5min
 
-# ────────────────────────────────────────────────────────────
-# SEKCJA: MQTT – publikuje dane do Hub
-# ────────────────────────────────────────────────────────────
-mqtt:
-  broker: 10.42.0.1
-  port: 1883
-  topic_prefix: reef/chem
-  keepalive: 60s
-  on_connect:
-    then:
-      - logger.log: "Connected to Sentinel Hub MQTT"
-  on_disconnect:
-    then:
-      - logger.log: "MQTT disconnected – retrying"
+web_server:
+  port: 80
+  local: true
+  version: 3
 
 # ────────────────────────────────────────────────────────────
-# SEKCJA: Zmienne globalne
-# Przechowują stan titracji między krokami skryptu
+# SEKCJA: ESPHome API – publikuje dane do Hub
 # ────────────────────────────────────────────────────────────
 globals:
   # Objętość HCl dozowana podczas titracji [ml]
@@ -150,6 +140,46 @@ globals:
     restore_value: true
     initial_value: "30.0"
 
+  # pH calibration points (voltage in buffer solutions)
+  - id: ph_cal_v4
+    type: float
+    restore_value: true
+    initial_value: "2.03"
+
+  - id: ph_cal_v7
+    type: float
+    restore_value: true
+    initial_value: "2.50"
+
+  # pH values of calibration liquids (2-point calibration)
+  - id: ph_cal_liquid1_ph
+    type: float
+    restore_value: true
+    initial_value: "4.00"
+
+  - id: ph_cal_liquid2_ph
+    type: float
+    restore_value: true
+    initial_value: "7.00"
+
+  # Konfigurowalne z Hub: interwał publikacji danych do Hub [s]
+  - id: publish_interval_s
+    type: int
+    restore_value: true
+    initial_value: "30"
+
+  # Konfigurowalne z Hub: interwał automatycznego testu KH [h], 0 = wyłączony
+  - id: kh_interval_h
+    type: int
+    restore_value: true
+    initial_value: "0"
+
+  # Pump calibration runtime [s] for manual ml/s measurement
+  - id: pump_cal_duration_s
+    type: int
+    restore_value: true
+    initial_value: "30"
+
 # ────────────────────────────────────────────────────────────
 # SEKCJA: 1-Wire (DS18B20 temperatury)
 # ────────────────────────────────────────────────────────────
@@ -173,12 +203,6 @@ sensor:
     device_class: temperature
     state_class: measurement
     update_interval: 30s
-    on_value:
-      then:
-        - mqtt.publish:
-            topic: reef/chem/temp/aquarium
-            payload: !lambda "return to_string(x);"
-
   - platform: dallas_temp
     address: 0x0000000000000001   # ← zastąp adresem z logów
     name: "Temperatura Sump"
@@ -188,12 +212,6 @@ sensor:
     device_class: temperature
     state_class: measurement
     update_interval: 30s
-    on_value:
-      then:
-        - mqtt.publish:
-            topic: reef/chem/temp/sump
-            payload: !lambda "return to_string(x);"
-
   - platform: dallas_temp
     address: 0x0000000000000002   # ← zastąp adresem z logów
     name: "Temperatura Komora"
@@ -203,53 +221,53 @@ sensor:
     device_class: temperature
     state_class: measurement
     update_interval: 10s   # Szybciej – używana do kompensacji pH
-    on_value:
-      then:
-        - mqtt.publish:
-            topic: reef/chem/temp/chamber
-            payload: !lambda "return to_string(x);"
-
   # ── pH (DFRobot Gravity pH V2) ──────────────────────────
   # GPIO34 – ADC1_CH6, tylko INPUT
   # Kalibracja 2-punktowa: bufor pH 4.0 i pH 7.0
   - platform: adc
     pin: GPIO34
+    name: "pH Voltage Raw"
+    id: ph_voltage_raw
+    unit_of_measurement: "V"
+    accuracy_decimals: 3
+    update_interval: 5s
+    attenuation: 11dB
+    filters:
+      - median:
+          window_size: 5
+          send_every: 5
+          send_first_at: 1
+      - round: 3
+
+  - platform: template
     name: "pH"
     id: ph_sensor
     unit_of_measurement: ""
     accuracy_decimals: 2
     update_interval: 15s
-    attenuation: 11dB   # Zakres 0–3.9V
+    lambda: |-
+      float v = id(ph_voltage_raw).state;
+      float v4 = id(ph_cal_v4);
+      float v7 = id(ph_cal_v7);
+      float p1 = id(ph_cal_liquid1_ph);
+      float p2 = id(ph_cal_liquid2_ph);
+      if (isnan(v) || isnan(v4) || isnan(v7) || isnan(p1) || isnan(p2) || fabsf(v7 - v4) < 0.0001f || fabsf(p2 - p1) < 0.0001f) {
+        return NAN;
+      }
+      float ph = p1 + (v - v4) * ((p2 - p1) / (v7 - v4));
+      float temp = id(temp_chamber).state;
+      if (!isnan(temp)) {
+        ph += (25.0f - temp) * 0.003f;
+      }
+      return ph;
     filters:
-      # Kalibracja liniowa 2-punktowa
-      # Krok 1: zmierz napięcie przy pH 4.0 → wpisz jako pierwszą parę
-      # Krok 2: zmierz napięcie przy pH 7.0 → wpisz jako drugą parę
-      # Przykładowe wartości – MUSISZ skalibrować swoją elektrodę!
-      - calibrate_linear:
-          - 2.03 -> 4.0    # ← napięcie [V] → pH 4.0
-          - 2.50 -> 7.0    # ← napięcie [V] → pH 7.0
-      # Kompensacja temperatury (Nernst, ~0.003 pH/°C)
-      # Wartość odejmowana / dodawana względem 25°C
-      - lambda: |-
-          float temp = id(temp_chamber).state;
-          if (isnan(temp)) temp = 25.0;
-          // Korekta: każdy stopień powyżej 25°C obniża pH o 0.003
-          return x + (25.0 - temp) * 0.003;
-      # Mediana z 5 odczytów (odrzuca skoki)
       - median:
           window_size: 5
           send_every: 5
-          send_first_at: 5
-      # Zaokrąglenie do 0.01
+          send_first_at: 1
       - round: 2
     icon: mdi:ph
     state_class: measurement
-    on_value:
-      then:
-        - mqtt.publish:
-            topic: reef/chem/ph/value
-            payload: !lambda "return to_string(x);"
-
   # ── EC / TDS (DFRobot Gravity TDS) ─────────────────────
   # GPIO32 – ADC1_CH4, tylko INPUT
   # Kalibracja jednopunktowa: roztwór 35 ppt (≈ 53mS/cm)
@@ -280,12 +298,6 @@ sensor:
       - round: 0
     icon: mdi:water-percent
     state_class: measurement
-    on_value:
-      then:
-        - mqtt.publish:
-            topic: reef/chem/ec/value
-            payload: !lambda "return to_string(x);"
-
   # ── KH – wynik titracji (template sensor) ───────────────
   - platform: template
     name: "KH"
@@ -316,12 +328,119 @@ binary_sensor:
     id: kh_test_running
     lambda: |-
       return id(titration_running);
-    on_state:
-      then:
-        - mqtt.publish:
-            topic: reef/chem/kh/test_running
-            payload: !lambda "return x ? \"true\" : \"false\";"
 
+number:
+  - platform: template
+    name: "publish_interval_s"
+    id: publish_interval_s_cfg
+    optimistic: true
+    restore_value: true
+    min_value: 10
+    max_value: 3600
+    step: 10
+    initial_value: 30
+    set_action:
+      - globals.set:
+          id: publish_interval_s
+          value: !lambda "return (int) x;"
+
+  - platform: template
+    name: "kh_interval_h"
+    id: kh_interval_h_cfg
+    optimistic: true
+    restore_value: true
+    min_value: 0
+    max_value: 24
+    step: 1
+    initial_value: 0
+    set_action:
+      - globals.set:
+          id: kh_interval_h
+          value: !lambda "return (int) x;"
+
+  - platform: template
+    name: "ph_cal_v4"
+    id: ph_cal_v4_cfg
+    optimistic: true
+    restore_value: true
+    min_value: 0
+    max_value: 4
+    step: 0.001
+    initial_value: 2.03
+    set_action:
+      - globals.set:
+          id: ph_cal_v4
+          value: !lambda "return x;"
+
+  - platform: template
+    name: "ph_cal_v7"
+    id: ph_cal_v7_cfg
+    optimistic: true
+    restore_value: true
+    min_value: 0
+    max_value: 4
+    step: 0.001
+    initial_value: 2.50
+    set_action:
+      - globals.set:
+          id: ph_cal_v7
+          value: !lambda "return x;"
+
+  - platform: template
+    name: "ph_cal_liquid1_ph"
+    id: ph_cal_liquid1_ph_cfg
+    optimistic: true
+    restore_value: true
+    min_value: 0
+    max_value: 14
+    step: 0.01
+    initial_value: 4.00
+    set_action:
+      - globals.set:
+          id: ph_cal_liquid1_ph
+          value: !lambda "return x;"
+
+  - platform: template
+    name: "ph_cal_liquid2_ph"
+    id: ph_cal_liquid2_ph_cfg
+    optimistic: true
+    restore_value: true
+    min_value: 0
+    max_value: 14
+    step: 0.01
+    initial_value: 7.00
+    set_action:
+      - globals.set:
+          id: ph_cal_liquid2_ph
+          value: !lambda "return x;"
+
+  - platform: template
+    name: "pump_cal_duration_s"
+    id: pump_cal_duration_s_cfg
+    optimistic: true
+    restore_value: true
+    min_value: 1
+    max_value: 120
+    step: 1
+    initial_value: 30
+    set_action:
+      - globals.set:
+          id: pump_cal_duration_s
+          value: !lambda "return (int) x;"
+
+  - platform: template
+    name: "pump_hcl_ml_per_pulse"
+    id: pump_hcl_ml_per_pulse_cfg
+    optimistic: true
+    restore_value: true
+    min_value: 0.001
+    max_value: 1.000
+    step: 0.001
+    initial_value: 0.050
+    set_action:
+      - globals.set:
+          id: pump_hcl_ml_per_pulse
+          value: !lambda "return x;"
 # ────────────────────────────────────────────────────────────
 # SEKCJA: PWM Output (Stirrer)
 # ────────────────────────────────────────────────────────────
@@ -391,35 +510,167 @@ button:
 
   # Start testu KH ręcznie (z HA lub fizycznie)
   - platform: template
-    name: "Start Test KH"
+    name: "start_kh_test"
     on_press:
       - script.execute: kh_test_sequence
 
   # Ręczne płukanie komory (konserwacja)
   - platform: template
-    name: "Flush Komora"
+    name: "flush_chamber"
     on_press:
       - script.execute: flush_chamber
 
-# ────────────────────────────────────────────────────────────
-# SEKCJA: MQTT subskrypcje – komendy z Sentinel Hub
-# ────────────────────────────────────────────────────────────
-# Odbiór komendy start_kh_test z Hub lub HA
-on_message:
-  - platform: mqtt
-    topic: reef/chem/cmd/start_kh_test
-    payload: "true"
-    then:
-      - script.execute: kh_test_sequence
+  - platform: template
+    name: "ph_cal_capture_7"
+    on_press:
+      - globals.set:
+          id: ph_cal_v7
+          value: !lambda "return id(ph_voltage_raw).state;"
+      - logger.log:
+          format: "pH calibration: captured pH7 voltage = %.3f V"
+          args: ["id(ph_cal_v7)"]
+
+  - platform: template
+    name: "ph_cal_capture_liquid2"
+    on_press:
+      - globals.set:
+          id: ph_cal_v7
+          value: !lambda "return id(ph_voltage_raw).state;"
+      - logger.log:
+          format: "pH calibration: captured liquid2 voltage = %.3f V"
+          args: ["id(ph_cal_v7)"]
+
+  - platform: template
+    name: "ph_cal_capture_4"
+    on_press:
+      - globals.set:
+          id: ph_cal_v4
+          value: !lambda "return id(ph_voltage_raw).state;"
+      - logger.log:
+          format: "pH calibration: captured pH4 voltage = %.3f V"
+          args: ["id(ph_cal_v4)"]
+
+  - platform: template
+    name: "ph_cal_capture_liquid1"
+    on_press:
+      - globals.set:
+          id: ph_cal_v4
+          value: !lambda "return id(ph_voltage_raw).state;"
+      - logger.log:
+          format: "pH calibration: captured liquid1 voltage = %.3f V"
+          args: ["id(ph_cal_v4)"]
+
+  - platform: template
+    name: "pump_cal_run_sample"
+    on_press:
+      - script.execute: pump_cal_run_sample_script
+
+  - platform: template
+    name: "pump_cal_run_hcl"
+    on_press:
+      - script.execute: pump_cal_run_hcl_script
+
+  - platform: template
+    name: "pump_cal_run_waste"
+    on_press:
+      - script.execute: pump_cal_run_waste_script
+
+  - platform: template
+    name: "pump_cal_run_ro"
+    on_press:
+      - script.execute: pump_cal_run_ro_script
 
 # ────────────────────────────────────────────────────────────
-# SEKCJA: Skrypty – logika titracji KH
+# SEKCJA: ESPHome API subskrypcje – komendy z Sentinel Hub
 # ────────────────────────────────────────────────────────────
+# Odbiór komendy start_kh_test z Hub lub HA
 script:
+  - id: publish_to_hub
+    then:
+      - http_request.post:
+          url: !lambda |-
+            char u[128];
+            float v = id(ph_sensor).state;
+            if (isnan(v)) v = -1.0f;
+            snprintf(u, sizeof(u), "http://10.42.0.1/number/chem_ph/set?value=%.2f", v);
+            return std::string(u);
+      - http_request.post:
+          url: !lambda |-
+            char u[128];
+            float v = id(kh_result);
+            if (isnan(v)) v = -1.0f;
+            snprintf(u, sizeof(u), "http://10.42.0.1/number/chem_kh/set?value=%.2f", v);
+            return std::string(u);
+      - http_request.post:
+          url: !lambda |-
+            char u[128];
+            float v = id(temp_aquarium).state;
+            if (isnan(v)) v = -1.0f;
+            snprintf(u, sizeof(u), "http://10.42.0.1/number/chem_temp_aquarium/set?value=%.2f", v);
+            return std::string(u);
+      - http_request.post:
+          url: !lambda |-
+            char u[128];
+            float v = id(temp_sump).state;
+            if (isnan(v)) v = -1.0f;
+            snprintf(u, sizeof(u), "http://10.42.0.1/number/chem_temp_sump/set?value=%.2f", v);
+            return std::string(u);
+      - http_request.post:
+          url: !lambda |-
+            char u[128];
+            float v = id(temp_chamber).state;
+            if (isnan(v)) v = -1.0f;
+            snprintf(u, sizeof(u), "http://10.42.0.1/number/chem_temp_chamber/set?value=%.2f", v);
+            return std::string(u);
+      - http_request.post:
+          url: !lambda |-
+            char u[128];
+            float v = id(ec_sensor).state;
+            if (isnan(v)) v = -1.0f;
+            snprintf(u, sizeof(u), "http://10.42.0.1/number/chem_ec/set?value=%.0f", v);
+            return std::string(u);
+      - http_request.post:
+          url: !lambda |-
+            char u[128];
+            snprintf(u, sizeof(u), "http://10.42.0.1/number/chem_kh_test_active/set?value=%d", id(titration_running) ? 1 : 0);
+            return std::string(u);
+
   # ──────────────────────────────────────────────────────────
   # GŁÓWNY SKRYPT: Pełna sekwencja testu KH
   # Czas: ~10–15 min
   # ──────────────────────────────────────────────────────────
+  - id: pump_cal_run_sample_script
+    mode: single
+    then:
+      - logger.log: "Pump calibration run: sample"
+      - switch.turn_on: pump_sample
+      - delay: !lambda "return (uint32_t) id(pump_cal_duration_s) * 1000;"
+      - switch.turn_off: pump_sample
+
+  - id: pump_cal_run_hcl_script
+    mode: single
+    then:
+      - logger.log: "Pump calibration run: hcl"
+      - switch.turn_on: pump_hcl
+      - delay: !lambda "return (uint32_t) id(pump_cal_duration_s) * 1000;"
+      - switch.turn_off: pump_hcl
+
+  - id: pump_cal_run_waste_script
+    mode: single
+    then:
+      - logger.log: "Pump calibration run: waste"
+      - switch.turn_on: pump_waste
+      - delay: !lambda "return (uint32_t) id(pump_cal_duration_s) * 1000;"
+      - switch.turn_off: pump_waste
+
+  - id: pump_cal_run_ro_script
+    mode: single
+    then:
+      - logger.log: "Pump calibration run: ro"
+      - switch.turn_on: pump_ro
+      - delay: !lambda "return (uint32_t) id(pump_cal_duration_s) * 1000;"
+      - switch.turn_off: pump_ro
+
   - id: kh_test_sequence
     mode: single   # Nie uruchamiaj drugi raz jeśli trwa
     then:
@@ -554,16 +805,7 @@ script:
 
       # Opublikuj wynik
       - component.update: kh_sensor
-      - mqtt.publish:
-          topic: reef/chem/kh/value
-          payload: !lambda "return to_string(id(kh_result));"
-      - mqtt.publish:
-          topic: reef/chem/kh/last_result
-          payload: !lambda |-
-            char buf[64];
-            snprintf(buf, sizeof(buf), "%.1f dKH", id(kh_result));
-            return std::string(buf);
-
+      - script.execute: publish_to_hub
       # ── FAZA 7: Wyłącz mieszadełko ────────────────────
       - fan.turn_off: stirrer
 
@@ -631,10 +873,7 @@ script:
       - globals.set:
           id: titration_running
           value: "false"
-      - mqtt.publish:
-          topic: reef/chem/kh/error
-          payload: "Test aborted – check pH sensor and connections"
-
+      - script.execute: publish_to_hub
 # ────────────────────────────────────────────────────────────
 # SEKCJA: Czas
 # ────────────────────────────────────────────────────────────
@@ -648,13 +887,31 @@ time:
 # ────────────────────────────────────────────────────────────
 # SEKCJA: Interwały – monitoring ciągły
 # ────────────────────────────────────────────────────────────
+
 interval:
-  # Publikuj pH co 15 minut (niezależnie od on_value)
-  - interval: 15min
+  - interval: 5s
     then:
-      - mqtt.publish:
-          topic: reef/chem/ph/value
-          payload: !lambda "return to_string(id(ph_sensor).state);"
-      - mqtt.publish:
-          topic: reef/chem/ec/value
-          payload: !lambda "return to_string(id(ec_sensor).state);"
+      - lambda: |-
+          static uint32_t last_publish = 0;
+          static uint32_t last_kh_test = 0;
+          const uint32_t now_s = millis() / 1000;
+
+          uint32_t pub_iv = (uint32_t) id(publish_interval_s);
+          if (pub_iv < 10) pub_iv = 10;
+          if (now_s - last_publish >= pub_iv) {
+            id(publish_to_hub).execute();
+            last_publish = now_s;
+          }
+
+          uint32_t kh_h = (uint32_t) id(kh_interval_h);
+          if (kh_h > 0 && !id(titration_running)) {
+            const uint32_t kh_iv = kh_h * 3600;
+            if (now_s - last_kh_test >= kh_iv) {
+              id(kh_test_sequence).execute();
+              last_kh_test = now_s;
+            }
+          }
+
+http_request:
+  timeout: 5s
+  verify_ssl: false

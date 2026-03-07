@@ -22,7 +22,7 @@ This BOM lists:
 
 Functions:
 - AP+STA WiFi coordination
-- MQTT brokering and data aggregation
+- Home Assistant bridging and data aggregation
 - OLED status output
 - optional SD logging
 
@@ -169,7 +169,7 @@ Main parts:
 | SD MISO | GPIO19 | SPI | |
 | SD SCK | GPIO18 | SPI | |
 | Status LED | GPIO2 | Digital | Built-in LED |
-| MQTT Broker | – | WiFi | Wbudowany broker (127.0.0.1:1883) |
+| Home Assistant bridge | – | WiFi | Agregacja przez Home Assistant (ESPHome API) |
 
 **GPIO użytych: 6 z ~25 dostępnych ✅**
 
@@ -411,5 +411,4 @@ PRZED PIERWSZYM WŁĄCZENIEM – CHECKLIST:
 *Reef Sentinel – Open-source aquarium controller*  
 *reef-sentinel.com | github.com/reef-sentinel*  
 *Ostatnia aktualizacja: 2026-03-06*
-
 

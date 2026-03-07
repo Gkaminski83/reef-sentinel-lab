@@ -23,7 +23,7 @@ Core features:
 
 ## Hardware Architecture
 - Nextion NX8048P050-011C display
-- ESP32 bridge receiving MQTT and sending UART commands
+- ESP32 bridge receiving ESPHome API and sending UART commands
 - LM2596 12V->5V shared rail
 - optional buzzer for alert sounds
 
@@ -44,7 +44,7 @@ Core features:
 3. Flash ESPHome bridge firmware
 4. Build UI in Nextion Editor
 5. Upload .tft via UART or microSD
-6. Validate MQTT-driven updates on screen
+6. Validate ESPHome API-driven updates on screen
 
 ---
 
@@ -59,7 +59,7 @@ Suggested pages:
 ---
 
 ## Firmware Role
-- subscribe to Hub/Chem MQTT topics
+- subscribe to Hub/Chem Home Assistant entities
 - convert payloads to Nextion component commands
 - send commands with Nextion terminator bytes
 
@@ -73,14 +73,14 @@ Suggested pages:
 
 ## Troubleshooting
 - no display: verify 5V rail and flashed UI
-- no updates: check UART TX/RX crossing and MQTT connectivity
+- no updates: check UART TX/RX crossing and ESPHome API connectivity
 - instability: verify rail current headroom and update frequency throttling
 
 ---
 
 ## Done Criteria
 - display boots consistently
-- real-time values update from MQTT
+- real-time values update from ESPHome API
 - touch navigation works
 - optional buzzer test works
 
@@ -119,11 +119,11 @@ Wyświetla dane w czasie rzeczywistym bez potrzeby otwierania telefonu czy lapto
 ```
 Sentinel Hub (10.42.0.1)
         │
-     WiFi MQTT
+     WiFi ESPHome API
         │
    ESP32 (bridge)
    ┌────┴────────────────────────────────┐
-   │  Odbiera dane z MQTT               │
+   │  Odbiera dane z ESPHome API               │
    │  Formatuje komendy Nextion          │
    │  Wysyła przez UART                  │
    └────┬────────────────────────────────┘
@@ -304,7 +304,7 @@ ESP32 GND    ──→ Buzzer (–)
 | GPIO17 | Nextion RX (UART2 TX) | Wysyła dane do Nextion |
 | GPIO25 | Buzzer PWM | Alerty dźwiękowe |
 | GPIO2 | Status LED | Wbudowana dioda |
-| WiFi | SentinelHub MQTT | Połączenie z Hub |
+| WiFi | SentinelHub ESPHome API | Połączenie z Hub |
 
 **GPIO użytych: 3 – minimalistyczne ✅**
 
@@ -340,20 +340,10 @@ wifi:
   ssid: "SentinelHub"
   password: "reef1234"
 
-mqtt:
-  broker: 10.42.0.1
-  port: 1883
-  topic_prefix: reef/view
-  on_message:
-    # Odbierz pH od Sentinel Chem i wyślij do Nextion
-    - topic: reef/chem/ph/value
-      then:
-        - uart.write:
-            id: nextion_uart
-            data: !lambda |-
-              std::string cmd = "pH.txt=\"" + x + "\"";
-              cmd += "\xff\xff\xff";
-              return std::vector<uint8_t>(cmd.begin(), cmd.end());
+# MQTT removed in no-broker architecture
+# Data path: ESPHome API via Home Assistant
+# Brak subskrypcji topiców na urządzeniu.
+# Sentinel View pobiera dane z encji Home Assistant.
     # Odbiór temperatury
     - topic: reef/chem/temp/aquarium
       then:
@@ -418,7 +408,7 @@ button:
 4. W logach po boocie:
 ```
 [I][wifi:290]: Connected to SentinelHub
-[I][mqtt:287]: MQTT connected to 10.42.0.1
+[I][api:000]: ESPHome API connected to 10.42.0.1
 ```
 
 ---
@@ -643,8 +633,8 @@ Przyczyna 1: TX i RX odwrócone
   → Zamień GPIO16 ↔ GPIO17 w fizycznym połączeniu
   → To najczęstszy błąd UART!
 
-Przyczyna 2: ESP32 nie łączy się z SentinelHub MQTT
-  → Sprawdź logi ESPHome – czy widać "MQTT connected"
+Przyczyna 2: ESP32 nie łączy się z SentinelHub ESPHome API
+  → Sprawdź logi ESPHome – czy widać "ESPHome API connected"
 
 Przyczyna 3: Błędna nazwa etykiety w YAML
   → Nazwa w YAML (np. pH.txt) musi dokładnie odpowiadać
@@ -690,7 +680,7 @@ HARDWARE:
 
 OPROGRAMOWANIE:
 ☐ ESPHome firmware wgrany
-☐ Połączenie z SentinelHub MQTT aktywne
+☐ Połączenie z SentinelHub ESPHome API aktywne
 ☐ UI Nextion wgrany (wszystkie 5 stron)
 ☐ Dane z Sentinel Chem/Monitor aktualizują się na ekranie
 
@@ -715,5 +705,4 @@ STATUS: ✅ Sentinel View gotowy!
 *Reef Sentinel Lab – Open-source aquarium controller*  
 *reef-sentinel.com | github.com/reef-sentinel*  
 *Ostatnia aktualizacja: 2026-03-06*
-
 

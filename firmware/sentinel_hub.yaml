@@ -1,29 +1,18 @@
 # ============================================================
-# Reef Sentinel Lab – Sentinel Hub (Module 1)
-# ESPHome firmware v1.0
+# Reef Sentinel Lab - Sentinel Hub (Module 1)
+# ESPHome firmware v1.1 (no MQTT)
 # ============================================================
-# Hardware:
-#   ESP32-WROOM-32 (30-pin DevKit)
-#   LM2596 12V→5V (dedykowany zasilacz 12V/2A)
-#   Grove OLED 0.96" SSD1306 I2C
-#   SD Card Reader SPI (opcjonalny)
-#
-# Funkcje:
-#   WiFi AP: SentinelHub (10.42.0.1) dla modułów
-#   WiFi STA: połączenie z siecią domową
-#   MQTT Broker: port 1883 (dla wszystkich modułów)
-#   OLED: status systemu
-#   SD: logowanie danych (opcjonalnie)
-#   Cloud sync: POST → reef-sentinel.com/api co 15 min
+# Communication model:
+# - Hub provides AP + STA networking
+# - Chem/Monitor reports to Home Assistant via native ESPHome API
+# - Hub reads Chem/Monitor entities from Home Assistant (no MQTT broker)
 # ============================================================
 
-# ────────────────────────────────────────────────────────────
-# SEKCJA: Tożsamość urządzenia
-# ────────────────────────────────────────────────────────────
 esphome:
   name: sentinel-hub
+  build_path: C:/esphome-build/hub
   friendly_name: "Sentinel Hub"
-  comment: "Reef Sentinel Lab – Module 1 / WiFi Coordinator"
+  comment: "Reef Sentinel Lab - Module 1 / Direct HTTP bridge"
   on_boot:
     priority: -100
     then:
@@ -35,16 +24,10 @@ esp32:
   framework:
     type: arduino
 
-# ────────────────────────────────────────────────────────────
-# SEKCJA: Logger
-# ────────────────────────────────────────────────────────────
 logger:
   level: INFO
   baud_rate: 115200
 
-# ────────────────────────────────────────────────────────────
-# SEKCJA: OTA + API
-# ────────────────────────────────────────────────────────────
 ota:
   - platform: esphome
     password: !secret ota_password
@@ -53,78 +36,45 @@ api:
   encryption:
     key: !secret api_encryption_key
 
-# ────────────────────────────────────────────────────────────
-# SEKCJA: WiFi – Dual mode (AP + STA)
-# ────────────────────────────────────────────────────────────
 wifi:
-  # STA – połączenie z siecią domową (dostęp do internetu, HA)
+  # STA - home network (internet + Home Assistant)
   ssid: !secret wifi_home_ssid
   password: !secret wifi_home_password
 
-  # AP – sieć dla modułów Reef Sentinel
+  # AP - local network for modules
   ap:
     ssid: "SentinelHub"
     password: !secret wifi_ap_password
-    # Stałe IP dla AP – moduły łączą się zawsze pod 10.42.0.1
     manual_ip:
       static_ip: 10.42.0.1
       gateway: 10.42.0.1
       subnet: 255.255.255.0
 
-  # Fallback AP jeśli sieć domowa niedostępna
   power_save_mode: none
 
 captive_portal:
 
-# ────────────────────────────────────────────────────────────
-# SEKCJA: MQTT Broker
-# Hub działa jako broker MQTT dla wszystkich modułów
-# Moduły łączą się pod 10.42.0.1:1883
-# ────────────────────────────────────────────────────────────
-mqtt:
-  broker: 127.0.0.1   # Lokalny broker na tym samym ESP32
-  port: 1883
-  topic_prefix: reef/hub
-  keepalive: 60s
-  log_topic:
-    topic: reef/hub/logs
-    level: WARN
-  on_connect:
-    then:
-      - logger.log: "MQTT Broker ready"
-      - script.execute: update_oled
-  on_disconnect:
-    then:
-      - logger.log: "MQTT disconnected"
+web_server:
+  port: 80
+  local: true
+  version: 3
 
-# ────────────────────────────────────────────────────────────
-# SEKCJA: I2C (OLED)
-# ────────────────────────────────────────────────────────────
 i2c:
   sda: GPIO21
   scl: GPIO22
   scan: true
   frequency: 400kHz
 
-# ────────────────────────────────────────────────────────────
-# SEKCJA: SPI (SD Card – opcjonalny)
-# ────────────────────────────────────────────────────────────
 spi:
   clk_pin: GPIO18
   mosi_pin: GPIO23
   miso_pin: GPIO19
 
-# ────────────────────────────────────────────────────────────
-# SEKCJA: SD Card
-# Odkomentuj jeśli używasz karty SD do logowania
-# ────────────────────────────────────────────────────────────
-# sd_mmc_card:  # Lub sd_card_fat
+# Optional SD card section kept commented
+# sd_mmc_card:
 #   cs_pin: GPIO5
 #   id: sd_card
 
-# ────────────────────────────────────────────────────────────
-# SEKCJA: OLED SSD1306 0.96"
-# ────────────────────────────────────────────────────────────
 display:
   - platform: ssd1306_i2c
     model: "SSD1306 128x64"
@@ -132,171 +82,314 @@ display:
     id: oled_display
     auto_clear_enabled: true
     lambda: |-
-      // Linia 1: Nazwa + IP
+      char ph_buf[8];
+      char kh_buf[8];
+      char t_buf[8];
+      char ec_buf[8];
+      if (isnan(id(ph_value).state)) snprintf(ph_buf, sizeof(ph_buf), "--");
+      else snprintf(ph_buf, sizeof(ph_buf), "%.2f", id(ph_value).state);
+      if (isnan(id(kh_value).state)) snprintf(kh_buf, sizeof(kh_buf), "--");
+      else snprintf(kh_buf, sizeof(kh_buf), "%.1f", id(kh_value).state);
+      if (isnan(id(temp_aquarium).state)) snprintf(t_buf, sizeof(t_buf), "--");
+      else snprintf(t_buf, sizeof(t_buf), "%.1f", id(temp_aquarium).state);
+      if (isnan(id(ec_value).state)) snprintf(ec_buf, sizeof(ec_buf), "--");
+      else snprintf(ec_buf, sizeof(ec_buf), "%.0f", id(ec_value).state);
       it.printf(0, 0, id(font_small), "Sentinel Hub");
-      it.printf(0, 12, id(font_small), "IP: %s", WiFi.localIP().toString().c_str());
-      // Linia 3: WiFi signal
-      it.printf(0, 24, id(font_small), "WiFi: %ddBm", WiFi.RSSI());
-      // Linia 4-5: Dane z modułów
-      it.printf(0, 36, id(font_small), "pH: %.2f  KH: %.1f",
-        id(ph_value).state,
-        id(kh_value).state);
-      it.printf(0, 48, id(font_small), "T: %.1f  EC: %.0f",
-        id(temp_aquarium).state,
-        id(ec_value).state);
+      it.printf(0, 12, id(font_small), "IP: %s", id(hub_ip_address).state.c_str());
+      it.printf(0, 24, id(font_small), "WiFi: %.0f dBm", id(hub_wifi_signal).state);
+      it.printf(0, 36, id(font_small), "pH:%s KH:%s", ph_buf, kh_buf);
+      it.printf(0, 48, id(font_small), "T:%s EC:%s", t_buf, ec_buf);
 
 font:
   - file: "gfonts://Roboto Mono"
     id: font_small
     size: 10
 
-# ────────────────────────────────────────────────────────────
-# SEKCJA: Status LED (GPIO2 wbudowana)
-# ────────────────────────────────────────────────────────────
 status_led:
   pin:
     number: GPIO2
     inverted: false
 
-# ────────────────────────────────────────────────────────────
-# SEKCJA: Sensory – odbiór danych z modułów przez MQTT
-# Hub subskrybuje topiki z Sentinel Chem/Monitor
-# i udostępnia je jako encje w Home Assistant
-# ────────────────────────────────────────────────────────────
 sensor:
-  # pH – z Sentinel Chem
-  - platform: mqtt_subscribe
+  # Data ingested from modules via HTTP -> web_server REST /number/<id>/set?value=...
+  - platform: template
     name: "pH"
     id: ph_value
-    topic: reef/chem/ph/value
-    unit_of_measurement: ""
-    accuracy_decimals: 2
-    icon: mdi:ph
-    device_class: ""
-    state_class: measurement
+    lambda: |-
+      return id(chem_ph).state;
+    update_interval: 30s
 
-  # KH – wynik titracji z Sentinel Chem
-  - platform: mqtt_subscribe
+  - platform: template
     name: "KH"
     id: kh_value
-    topic: reef/chem/kh/value
-    unit_of_measurement: "dKH"
-    accuracy_decimals: 1
-    icon: mdi:test-tube
-    state_class: measurement
+    lambda: |-
+      return id(chem_kh).state;
+    update_interval: 30s
 
-  # Temperatura akwarium – z Sentinel Monitor
-  - platform: mqtt_subscribe
+  - platform: template
     name: "Temperatura Akwarium"
     id: temp_aquarium
-    topic: reef/chem/temp/aquarium
-    unit_of_measurement: "°C"
-    accuracy_decimals: 1
-    device_class: temperature
-    state_class: measurement
+    lambda: |-
+      return id(chem_temp_aquarium).state;
+    update_interval: 30s
 
-  # Temperatura sump
-  - platform: mqtt_subscribe
+  - platform: template
     name: "Temperatura Sump"
     id: temp_sump
-    topic: reef/chem/temp/sump
-    unit_of_measurement: "°C"
-    accuracy_decimals: 1
-    device_class: temperature
-    state_class: measurement
+    lambda: |-
+      return id(chem_temp_sump).state;
+    update_interval: 30s
 
-  # Temperatura komory pomiarowej
-  - platform: mqtt_subscribe
+  - platform: template
     name: "Temperatura Komora"
     id: temp_chamber
-    topic: reef/chem/temp/chamber
-    unit_of_measurement: "°C"
-    accuracy_decimals: 1
-    device_class: temperature
-    state_class: measurement
+    lambda: |-
+      return id(chem_temp_chamber).state;
+    update_interval: 30s
 
-  # EC / Zasolenie
-  - platform: mqtt_subscribe
+  - platform: template
     name: "EC Zasolenie"
     id: ec_value
-    topic: reef/chem/ec/value
-    unit_of_measurement: "µS/cm"
-    accuracy_decimals: 0
-    icon: mdi:water-percent
-    state_class: measurement
+    lambda: |-
+      return id(chem_ec).state;
+    update_interval: 30s
 
-  # WiFi signal Hub
   - platform: wifi_signal
     name: "Hub WiFi Signal"
+    id: hub_wifi_signal
     update_interval: 60s
     unit_of_measurement: "dBm"
     device_class: signal_strength
     state_class: measurement
 
-  # Uptime Hub
   - platform: uptime
     name: "Hub Uptime"
     update_interval: 60s
     unit_of_measurement: "s"
 
-# ────────────────────────────────────────────────────────────
-# SEKCJA: Binary sensors – statusy modułów
-# ────────────────────────────────────────────────────────────
 binary_sensor:
-  # Status połączenia z siecią domową
   - platform: status
     name: "Hub Status"
 
-  # Status testu KH (czy trwa titracja)
-  - platform: mqtt_subscribe
+  - platform: template
     name: "Test KH Aktywny"
     id: kh_test_active
-    topic: reef/chem/kh/test_running
-    payload_on: "true"
-    payload_off: "false"
+    lambda: |-
+      return id(chem_kh_test_active).state > 0.5f;
 
-# ────────────────────────────────────────────────────────────
-# SEKCJA: Text sensors
-# ────────────────────────────────────────────────────────────
 text_sensor:
-  # IP Hub na AP
   - platform: wifi_info
     ip_address:
       name: "Hub IP Address"
+      id: hub_ip_address
     ssid:
       name: "Hub WiFi SSID"
 
-  # Ostatni wynik testu KH (timestamp + wartość)
-  - platform: mqtt_subscribe
+  - platform: template
     name: "Ostatni Test KH"
-    topic: reef/chem/kh/last_result
+    id: last_kh_result
+    lambda: |-
+      char buf[32];
+      if (isnan(id(kh_value).state)) {
+        return {"brak danych"};
+      }
+      snprintf(buf, sizeof(buf), "%.1f dKH", id(kh_value).state);
+      return {buf};
 
-# ────────────────────────────────────────────────────────────
-# SEKCJA: Przyciski
-# ────────────────────────────────────────────────────────────
+number:
+  - platform: template
+    name: "chem_ph"
+    id: chem_ph
+    optimistic: true
+    restore_value: true
+    min_value: -1
+    max_value: 14
+    step: 0.01
+
+  - platform: template
+    name: "chem_kh"
+    id: chem_kh
+    optimistic: true
+    restore_value: true
+    min_value: -1
+    max_value: 25
+    step: 0.1
+
+  - platform: template
+    name: "chem_temp_aquarium"
+    id: chem_temp_aquarium
+    optimistic: true
+    restore_value: true
+    min_value: -20
+    max_value: 80
+    step: 0.1
+
+  - platform: template
+    name: "chem_temp_sump"
+    id: chem_temp_sump
+    optimistic: true
+    restore_value: true
+    min_value: -20
+    max_value: 80
+    step: 0.1
+
+  - platform: template
+    name: "chem_temp_chamber"
+    id: chem_temp_chamber
+    optimistic: true
+    restore_value: true
+    min_value: -20
+    max_value: 80
+    step: 0.1
+
+  - platform: template
+    name: "chem_ec"
+    id: chem_ec
+    optimistic: true
+    restore_value: true
+    min_value: -1
+    max_value: 100000
+    step: 1
+
+  - platform: template
+    name: "chem_kh_test_active"
+    id: chem_kh_test_active
+    optimistic: true
+    restore_value: true
+    min_value: 0
+    max_value: 1
+    step: 1
+
+  # Hub-configurable settings pushed to Chem
+  - platform: template
+    name: "chem_publish_interval_s"
+    id: chem_publish_interval_s
+    optimistic: true
+    restore_value: true
+    min_value: 10
+    max_value: 3600
+    step: 10
+    initial_value: 30
+
+  - platform: template
+    name: "chem_kh_interval_h"
+    id: chem_kh_interval_h
+    optimistic: true
+    restore_value: true
+    min_value: 0
+    max_value: 24
+    step: 1
+    initial_value: 0
+
+  - platform: template
+    name: "chem_ph_cal_v4"
+    id: chem_ph_cal_v4
+    optimistic: true
+    restore_value: true
+    min_value: 0
+    max_value: 4
+    step: 0.001
+    initial_value: 2.03
+
+  - platform: template
+    name: "chem_ph_cal_v7"
+    id: chem_ph_cal_v7
+    optimistic: true
+    restore_value: true
+    min_value: 0
+    max_value: 4
+    step: 0.001
+    initial_value: 2.50
+
+  - platform: template
+    name: "chem_ph_cal_liquid1_ph"
+    id: chem_ph_cal_liquid1_ph
+    optimistic: true
+    restore_value: true
+    min_value: 0
+    max_value: 14
+    step: 0.01
+    initial_value: 4.00
+
+  - platform: template
+    name: "chem_ph_cal_liquid2_ph"
+    id: chem_ph_cal_liquid2_ph
+    optimistic: true
+    restore_value: true
+    min_value: 0
+    max_value: 14
+    step: 0.01
+    initial_value: 7.00
+
+  - platform: template
+    name: "chem_pump_cal_duration_s"
+    id: chem_pump_cal_duration_s
+    optimistic: true
+    restore_value: true
+    min_value: 1
+    max_value: 120
+    step: 1
+    initial_value: 30
+
+  - platform: template
+    name: "chem_pump_hcl_ml_per_pulse"
+    id: chem_pump_hcl_ml_per_pulse
+    optimistic: true
+    restore_value: true
+    min_value: 0.001
+    max_value: 1.000
+    step: 0.001
+    initial_value: 0.050
+
 button:
-  # Restart Hub
   - platform: restart
     name: "Hub Restart"
 
-  # Wymuś cloud sync natychmiast
   - platform: template
     name: "Force Cloud Sync"
     on_press:
       - script.execute: cloud_sync
 
-  # Wymuś test KH natychmiast (wysyła komendę do Sentinel Chem)
   - platform: template
     name: "Start Test KH"
     on_press:
-      - mqtt.publish:
-          topic: reef/chem/cmd/start_kh_test
-          payload: "true"
-      - logger.log: "KH test command sent"
+      - script.execute: start_kh_test_remote
 
-# ────────────────────────────────────────────────────────────
-# SEKCJA: Czas – pobieranie NTP
-# ────────────────────────────────────────────────────────────
+  - platform: template
+    name: "Apply Chem Settings"
+    on_press:
+      - script.execute: apply_chem_settings
+
+  - platform: template
+    name: "Chem pH Cal Capture Liquid2"
+    on_press:
+      - script.execute: chem_ph_cal_capture_7
+
+  - platform: template
+    name: "Chem pH Cal Capture Liquid1"
+    on_press:
+      - script.execute: chem_ph_cal_capture_4
+
+  - platform: template
+    name: "Chem Pump Cal Run Sample"
+    on_press:
+      - script.execute: chem_pump_cal_run_sample
+
+  - platform: template
+    name: "Chem Pump Cal Run HCL"
+    on_press:
+      - script.execute: chem_pump_cal_run_hcl
+
+  - platform: template
+    name: "Chem Pump Cal Run Waste"
+    on_press:
+      - script.execute: chem_pump_cal_run_waste
+
+  - platform: template
+    name: "Chem Pump Cal Run RO"
+    on_press:
+      - script.execute: chem_pump_cal_run_ro
+
 time:
   - platform: sntp
     id: sntp_time
@@ -306,63 +399,45 @@ time:
       - time.google.com
     on_time_sync:
       - logger.log: "Time synced"
-    # Zaplanowane testy KH (można zmienić w HA przez input_number)
-    on_time:
-      # Test KH o 08:00
-      - seconds: 0
-        minutes: 0
-        hours: 8
-        then:
-          - mqtt.publish:
-              topic: reef/chem/cmd/start_kh_test
-              payload: "true"
-          - logger.log: "Scheduled KH test at 08:00"
-      # Opcjonalny drugi test o 20:00 (odkomentuj jeśli potrzebujesz)
-      # - seconds: 0
-      #   minutes: 0
-      #   hours: 20
-      #   then:
-      #     - mqtt.publish:
-      #         topic: reef/chem/cmd/start_kh_test
-      #         payload: "true"
 
-# ────────────────────────────────────────────────────────────
-# SEKCJA: Skrypty
-# ────────────────────────────────────────────────────────────
 script:
-  # Odświeżenie OLED
   - id: update_oled
     then:
       - component.update: oled_display
 
-  # Cloud sync – POST do reef-sentinel.com
-  # Agreguje dane z ostatnich 15 minut i wysyła do API
   - id: cloud_sync
     then:
       - logger.log: "Cloud sync starting..."
       - http_request.post:
           url: "https://reef-sentinel.com/api/integrations/webhook"
-          headers:
+          request_headers:
             Content-Type: application/json
             X-API-Key: !secret reef_sentinel_api_key
-          json:
-            tank_id: !secret tank_id
-            measurements:
-              - parameter: ph
-                value: !lambda "return id(ph_value).state;"
-                timestamp: !lambda "return id(sntp_time).now().timestamp;"
-              - parameter: kh
-                value: !lambda "return id(kh_value).state;"
-                timestamp: !lambda "return id(sntp_time).now().timestamp;"
-              - parameter: temp_aquarium
-                value: !lambda "return id(temp_aquarium).state;"
-                timestamp: !lambda "return id(sntp_time).now().timestamp;"
-              - parameter: temp_sump
-                value: !lambda "return id(temp_sump).state;"
-                timestamp: !lambda "return id(sntp_time).now().timestamp;"
-              - parameter: ec
-                value: !lambda "return id(ec_value).state;"
-                timestamp: !lambda "return id(sntp_time).now().timestamp;"
+          body: !lambda |-
+            float ph = id(ph_value).state;
+            float kh = id(kh_value).state;
+            float ta = id(temp_aquarium).state;
+            float ts = id(temp_sump).state;
+            float ec = id(ec_value).state;
+            if (isnan(ph)) ph = -1.0;
+            if (isnan(kh)) kh = -1.0;
+            if (isnan(ta)) ta = -1.0;
+            if (isnan(ts)) ts = -1.0;
+            if (isnan(ec)) ec = -1.0;
+            char payload[320];
+            snprintf(
+              payload,
+              sizeof(payload),
+              "{\"tank_id\":\"%s\",\"ph\":%.2f,\"kh\":%.2f,\"temp_aquarium\":%.2f,\"temp_sump\":%.2f,\"ec\":%.2f,\"timestamp\":%lld}",
+              "${tank_id}",
+              ph,
+              kh,
+              ta,
+              ts,
+              ec,
+              (long long) id(sntp_time).now().timestamp
+            );
+            return std::string(payload);
           on_response:
             then:
               - if:
@@ -375,17 +450,158 @@ script:
                         format: "Cloud sync FAILED: HTTP %d"
                         args: ["response->status_code"]
 
-# Cloud sync co 15 minut przez interval
+  - id: start_kh_test_remote
+    then:
+      - logger.log: "Sending KH test start command to Chem..."
+      - http_request.post:
+          url: "http://10.42.0.2/button/start_kh_test/press"
+          request_headers:
+            Content-Type: text/plain
+      - logger.log: "KH start command sent"
+
+  - id: apply_chem_settings
+    then:
+      - logger.log: "Pushing Chem settings from Hub..."
+      - http_request.post:
+          url: !lambda |-
+            char u[128];
+            snprintf(
+              u,
+              sizeof(u),
+              "http://10.42.0.2/number/publish_interval_s/set?value=%d",
+              (int) id(chem_publish_interval_s).state
+            );
+            return std::string(u);
+      - http_request.post:
+          url: !lambda |-
+            char u[128];
+            snprintf(
+              u,
+              sizeof(u),
+              "http://10.42.0.2/number/kh_interval_h/set?value=%d",
+              (int) id(chem_kh_interval_h).state
+            );
+            return std::string(u);
+      - http_request.post:
+          url: !lambda |-
+            char u[128];
+            snprintf(
+              u,
+              sizeof(u),
+              "http://10.42.0.2/number/ph_cal_v4/set?value=%.3f",
+              id(chem_ph_cal_v4).state
+            );
+            return std::string(u);
+      - http_request.post:
+          url: !lambda |-
+            char u[128];
+            snprintf(
+              u,
+              sizeof(u),
+              "http://10.42.0.2/number/ph_cal_v7/set?value=%.3f",
+              id(chem_ph_cal_v7).state
+            );
+            return std::string(u);
+      - http_request.post:
+          url: !lambda |-
+            char u[128];
+            snprintf(
+              u,
+              sizeof(u),
+              "http://10.42.0.2/number/ph_cal_liquid1_ph/set?value=%.2f",
+              id(chem_ph_cal_liquid1_ph).state
+            );
+            return std::string(u);
+      - http_request.post:
+          url: !lambda |-
+            char u[128];
+            snprintf(
+              u,
+              sizeof(u),
+              "http://10.42.0.2/number/ph_cal_liquid2_ph/set?value=%.2f",
+              id(chem_ph_cal_liquid2_ph).state
+            );
+            return std::string(u);
+      - http_request.post:
+          url: !lambda |-
+            char u[128];
+            snprintf(
+              u,
+              sizeof(u),
+              "http://10.42.0.2/number/pump_cal_duration_s/set?value=%d",
+              (int) id(chem_pump_cal_duration_s).state
+            );
+            return std::string(u);
+      - http_request.post:
+          url: !lambda |-
+            char u[128];
+            snprintf(
+              u,
+              sizeof(u),
+              "http://10.42.0.2/number/pump_hcl_ml_per_pulse/set?value=%.3f",
+              id(chem_pump_hcl_ml_per_pulse).state
+            );
+            return std::string(u);
+      - logger.log: "Chem settings pushed"
+
+  - id: chem_ph_cal_capture_7
+    then:
+      - logger.log: "Chem pH calibration capture for liquid2 requested..."
+      - http_request.post:
+          url: "http://10.42.0.2/button/ph_cal_capture_liquid2/press"
+          request_headers:
+            Content-Type: text/plain
+
+  - id: chem_ph_cal_capture_4
+    then:
+      - logger.log: "Chem pH calibration capture for liquid1 requested..."
+      - http_request.post:
+          url: "http://10.42.0.2/button/ph_cal_capture_liquid1/press"
+          request_headers:
+            Content-Type: text/plain
+
+  - id: chem_pump_cal_run_sample
+    then:
+      - logger.log: "Chem pump calibration run: sample"
+      - http_request.post:
+          url: "http://10.42.0.2/button/pump_cal_run_sample/press"
+          request_headers:
+            Content-Type: text/plain
+
+  - id: chem_pump_cal_run_hcl
+    then:
+      - logger.log: "Chem pump calibration run: hcl"
+      - http_request.post:
+          url: "http://10.42.0.2/button/pump_cal_run_hcl/press"
+          request_headers:
+            Content-Type: text/plain
+
+  - id: chem_pump_cal_run_waste
+    then:
+      - logger.log: "Chem pump calibration run: waste"
+      - http_request.post:
+          url: "http://10.42.0.2/button/pump_cal_run_waste/press"
+          request_headers:
+            Content-Type: text/plain
+
+  - id: chem_pump_cal_run_ro
+    then:
+      - logger.log: "Chem pump calibration run: ro"
+      - http_request.post:
+          url: "http://10.42.0.2/button/pump_cal_run_ro/press"
+          request_headers:
+            Content-Type: text/plain
+
 interval:
+  - interval: 10s
+    then:
+      - script.execute: update_oled
+
   - interval: 15min
     then:
       - script.execute: cloud_sync
-      - script.execute: update_oled
 
-# ────────────────────────────────────────────────────────────
-# SEKCJA: HTTP Request (potrzebny do cloud sync)
-# ────────────────────────────────────────────────────────────
 http_request:
-  useragent: "sentinel-hub/1.0 ESPHome"
+  useragent: "sentinel-hub/1.1 ESPHome"
   timeout: 10s
   verify_ssl: true

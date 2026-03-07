@@ -13,7 +13,7 @@ Difficulty: Basic
 ## Purpose
 
 Sentinel Hub is the system coordinator.
-It provides AP+STA networking, MQTT integration, and status display.
+It provides AP+STA networking, ESPHome API integration, and status display.
 
 ---
 
@@ -67,7 +67,7 @@ It provides AP+STA networking, MQTT integration, and status display.
 ## Firmware (ESPHome)
 - Flash Hub YAML via USB with external 12V disconnected.
 - Enable WiFi AP SentinelHub and connect to home network as STA.
-- Verify MQTT availability and OLED output.
+- Verify ESPHome API availability and OLED output.
 
 ---
 
@@ -75,7 +75,7 @@ It provides AP+STA networking, MQTT integration, and status display.
 - Add detected ESPHome device
 - confirm status/wifi/uptime entities
 - validate 
-eef/# topic flow in MQTT tools
+eef/# topic flow in ESPHome API tools
 
 ---
 
@@ -91,7 +91,7 @@ eef/# topic flow in MQTT tools
 - stable boot from LM2596 power
 - AP visible (SentinelHub)
 - HA integration active
-- MQTT path operational
+- ESPHome API path operational
 
 ---
 
@@ -571,11 +571,11 @@ wifi:
 # Portal konfiguracyjny (gdy brak WiFi)
 captive_portal:
 
-# MQTT broker - wbudowany (dla komunikacji między modułami)
-mqtt:
-  broker: 127.0.0.1
-  port: 1883
-  discovery: true
+# Lokalny agregator danych modułów (bez MQTT, bez HA)
+# Data path: HTTP REST (module -> Hub web_server)
+api:
+  encryption:
+    key: !secret api_encryption_key
 
 # OLED 0.96" I2C (SSD1306)
 i2c:
@@ -668,7 +668,7 @@ ota_password: "dowolneHasloOTA"
 ```
 [I][wifi:290]: WiFi connected to "NazwaTwojejSieci"
 [I][wifi:290]: IP: 192.168.x.x
-[I][mqtt:287]: MQTT connected to 127.0.0.1
+[I][api:000]: ESPHome API connected to 127.0.0.1
 ```
 
 ### Krok 6.4 – Test bezprzewodowy
@@ -685,55 +685,45 @@ ota_password: "dowolneHasloOTA"
 
 ### Co kalibrujemy w Sentinel Hub?
 
-Sentinel Hub sam w sobie nie ma czujników wymagających kalibracji.
-Jedyne co ustawiamy to:
+Sentinel Hub nie ma wlasnych sond, ale od tej wersji pelni panel sterowania kalibracja modulu Chem.
 
-**7.1 Napięcie LM2596** – zrobione w Etapie 1.
+**7.1 Napiecie LM2596** - jak wczesniej, 5.0V.
 
-**7.2 Czas systemowy** – ESPHome automatycznie synchronizuje czas przez NTP gdy jest połączenie z internetem. Brak kalibracji ręcznej.
+**7.2 Czas systemowy (NTP)** - automatycznie.
 
-**7.3 Weryfikacja OLED** – sprawdź czy wyświetlane dane są poprawne:
-- IP powinno zgadzać się z tym co widać w routerze
-- Czas powinien być poprawny po ~1 min od pierwszego połączenia z WiFi
+**7.3 Kalibracja pH modulu Chem z poziomu Hub**
+1. Wejdz na `http://10.42.0.1` (web_server Hub).
+2. Ustaw `chem_ph_cal_liquid1_ph` i `chem_ph_cal_liquid2_ph` na wartosci uzytych buforow (dowolne 2 wartosci, np. 4.01 i 7.00).
+3. Zanurz sonde w plynie #1 i uzyj przycisku `Chem pH Cal Capture Liquid1`.
+4. Oplucz sonde, zanurz w plynie #2 i uzyj `Chem pH Cal Capture Liquid2`.
+5. Kliknij `Apply Chem Settings`.
 
-**7.4 Weryfikacja SD Card** (jeśli używasz):
-
-W logach ESPHome po boocie powinieneś zobaczyć:
-```
-[I][sd_card:050]: Mounted SD card, size: 7633 MB
-```
-Jeśli zobaczysz błąd `Failed to mount`, sprawdź połączenia SPI i czy karta jest sformatowana (FAT32).
+**7.4 Kalibracja pomp modulu Chem z poziomu Hub**
+1. Ustaw czas testu `chem_pump_cal_duration_s` (np. 30 s).
+2. Uruchamiaj pompy przyciskami `Chem Pump Cal Run ...` i mierz realny przeplyw.
+3. Dla pompy HCl wpisz skalibrowane `chem_pump_hcl_ml_per_pulse`.
+4. Kliknij `Apply Chem Settings`.
 
 ---
 
-## ETAP 8 – INTEGRACJA Z HOME ASSISTANT
+## ETAP 8 - INTEGRACJA Z HOME ASSISTANT (OPCJONALNA)
 
-### Krok 8.1 – Dodaj urządzenie do HA
+Home Assistant nie jest wymagany do dzialania Hub <-> Chem.
+Uzywaj HA tylko jesli chcesz dodatkowe dashboardy/automatyzacje.
 
-1. HA automatycznie wykryje Sentinel Hub przez ESPHome API
-2. Idź w HA → **Ustawienia** → **Urządzenia i usługi**
-3. Zobaczysz powiadomienie o nowym urządzeniu **Sentinel Hub**
-4. Kliknij **Konfiguruj** i wpisz klucz szyfrowania (z secrets.yaml)
+### Krok 8.1 - Dodaj urzadzenie do HA
 
-### Krok 8.2 – Weryfikacja encji
+1. HA wykryje Sentinel Hub przez ESPHome API.
+2. Wejdz w **Ustawienia** -> **Urzadzenia i uslugi**.
+3. Dodaj **Sentinel Hub** i podaj klucz szyfrowania z `secrets.yaml`.
 
-Po dodaniu powinieneś mieć w HA:
+### Krok 8.2 - Weryfikacja encji
 
-| Encja | Typ | Opis |
-|-------|-----|------|
-| `sensor.sentinel_hub_ip` | Sensor | Adres IP Sentinel Hub |
-| `sensor.sentinel_hub_wifi_signal` | Sensor | Siła sygnału WiFi (dBm) |
-| `sensor.sentinel_hub_uptime` | Sensor | Czas pracy (s) |
-| `binary_sensor.sentinel_hub_status` | Binary | Online/Offline |
-| `button.sentinel_hub_restart` | Przycisk | Restart zdalny |
+Po dodaniu powinienes miec m.in. encje statusowe Hub oraz encje sterujace Chem (`chem_*`).
 
-### Krok 8.3 – Weryfikacja MQTT
+### Krok 8.3 - Weryfikacja API
 
-Sprawdź czy broker MQTT na Sentinel Hub działa:
-
-W HA → **Ustawienia** → **Automatyzacje** → **Narzędzia deweloperskie** → **MQTT**:
-- Subskrybuj temat: `reef/#`
-- Jeśli widzisz jakiekolwiek wiadomości → MQTT działa ✅
+Sprawdz, ze encje aktualizuja sie na zywo i ze wywolania przyciskow/number dzialaja poprawnie.
 
 ---
 
@@ -823,20 +813,20 @@ Przyczyna 3: ESPHome Add-on nie uruchomiony
   → HA → Add-ons → ESPHome → sprawdź czy działa
 ```
 
-### Problem: MQTT nie działa (moduły się nie widzą)
+### Problem: ESPHome API nie działa (moduły się nie widzą)
 
 ```
 Przyczyna 1: Moduł nie łączy się z Sentinel Hub AP
   → Sprawdź czy sieć "SentinelHub" jest widoczna na telefonie
   → Sprawdź hasło: reef1234
 
-Przyczyna 2: Zły adres brokera w module
-  → Broker jest na 10.42.0.1 (adres AP Sentinel Hub)
-  → W konfiguracji innych modułów: broker: 10.42.0.1
+Przyczyna 2: Moduł nie został poprawnie dodany do Home Assistant
+  → Dodaj urządzenie przez integrację ESPHome
+  → Sprawdź klucz `api_encryption_key`
 
-Przyczyna 3: Firewall ESP32 / kolizja portów
-  → Domyślny port MQTT: 1883 (bez SSL)
-  → Sprawdź czy nic innego nie używa portu 1883
+Przyczyna 3: Firewall / izolacja sieci
+  → ESPHome API działa przez natywny port ESPHome
+  → Upewnij się, że HA i moduły są w tej samej sieci
 ```
 
 ---
@@ -855,7 +845,8 @@ OPROGRAMOWANIE:
 ☐ ESPHome firmware wgrany bez błędów
 ☐ WiFi: połączony z siecią domową (IP przypisane)
 ☐ WiFi AP: "SentinelHub" widoczny na telefonie (hasło: reef1234)
-☐ MQTT broker: działa na 127.0.0.1:1883
+☐ Komunikacja HTTP Hub <-> moduły działa (odczyty i komendy kalibracyjne)
+☐ Home Assistant (opcjonalnie): encje aktualizują się poprawnie
 
 INTEGRACJA:
 ☐ Sentinel Hub widoczny w Home Assistant
@@ -873,7 +864,7 @@ STATUS: ✅ Sentinel Hub gotowy do pracy!
 Po ukończeniu Sentinel Hub:
 
 1. **Sentinel Chem/Monitor** – gdy przyjdą brakujące komponenty (~177 zł)
-2. **Konfiguracja MQTT** – połączenie między modułami
+2. **Konfiguracja ESPHome API** – połączenie między modułami
 3. **Cloud sync** – konfiguracja klucza API reef-sentinel.com
 4. **Deploy na akwarium** – 24/7 monitoring
 
@@ -890,5 +881,3 @@ Po ukończeniu Sentinel Hub:
 *Reef Sentinel – Open-source aquarium controller*  
 *reef-sentinel.com | github.com/reef-sentinel*  
 *Ostatnia aktualizacja: 2026-03-06*
-
-

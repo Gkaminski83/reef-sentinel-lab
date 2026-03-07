@@ -55,7 +55,7 @@ Target channels:
 2. Ca sample + reagent reaction + reading
 3. drain/flush
 4. Mg sample + reagent reaction + reading
-5. publish results via MQTT
+5. publish results via ESPHome API
 
 ---
 
@@ -75,7 +75,7 @@ Target channels:
 ---
 
 ## Integration
-- publish to Hub MQTT topics for Ca/Mg
+- publish to Hub Home Assistant entities for Ca/Mg
 - expose values to HA and Sentinel View
 
 ---
@@ -169,7 +169,7 @@ Krok 3: OBLICZENIE
 ```
                     SENTINEL HUB
                          │
-                      WiFi MQTT
+                      WiFi ESPHome API
                          │
                     ESP32 (bridge)
                          │
@@ -335,7 +335,7 @@ START
   │
   ▼
 17. Finalne płukanie RO × 3 (30s każde)
-18. Wyślij wyniki przez MQTT → Sentinel Hub
+18. Wyślij wyniki przez ESPHome API → Sentinel Hub
     {ca: 425, mg: 1340, unit: "ppm", timestamp: ...}
 
 KONIEC (~12 min total)
@@ -440,9 +440,10 @@ wifi:
   ssid: "SentinelHub"
   password: "reef1234"
 
-mqtt:
-  broker: 10.42.0.1
-  topic_prefix: reef/photo
+# MQTT removed in no-broker architecture
+# Data path: ESPHome API via Home Assistant
+# Brak lokalnego broker/client bus na module.
+# Publikacja pomiarów przez encje ESPHome -> Home Assistant.
 
 # ADS1115 (16-bit ADC)
 i2c:
@@ -476,17 +477,17 @@ switch:
 # - czas reakcji (timer)
 # - pomiar absorbancji
 # - obliczenie stężenia (krzywa kalibracyjna)
-# - wysłanie przez MQTT
+# - wysłanie przez ESPHome API
 ```
 
 ---
 
 ## INTEGRACJA Z SYSTEMEM
 
-Sentinel Photometer dołącza do istniejącej sieci MQTT jako kolejny klient:
+Sentinel Photometer dołącza do istniejącej sieci ESPHome API jako kolejny klient:
 
 ```
-Sentinel Hub (MQTT Broker 10.42.0.1)
+Sentinel Hub (Home Assistant bridge 10.42.0.1)
        │
        ├── reef/chem/ph        ← Sentinel Chem/Monitor
        ├── reef/chem/kh        ← Sentinel Chem/Monitor
@@ -516,7 +517,7 @@ Q3 2026 (Sentinel Photometer v0.1):
   [ ] Kalibracja 3-punktowa Ca
   [ ] Kalibracja 3-punktowa Mg
   [ ] Firmware ESPHome (algorytm pomiaru)
-  [ ] Integracja z Hub (MQTT)
+  [ ] Integracja z Hub (ESPHome API)
   [ ] Testy na wodzie akwaryjnej (porównanie z Salifert)
 
 Q4 2026 (Sentinel Photometer v1.0):
@@ -600,5 +601,4 @@ Arsenazo III i Calmagite rozkładają się w świetle i w podwyższonej temperat
 *Reef Sentinel Lab – Open-source aquarium controller*  
 *reef-sentinel.com | github.com/reef-sentinel*  
 *Ostatnia aktualizacja: 2026-03-06*
-
 

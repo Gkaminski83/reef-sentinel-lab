@@ -23,7 +23,7 @@ Previous ESP32-S3 + SPI LCD concept is deprecated.
 
 ### Bridge controller
 - ESP32 DevKit (WROOM-32)
-- Handles MQTT subscription and UART commands to display
+- Handles ESPHome API subscription and UART commands to display
 
 ### Power
 - LM2596 12V -> 5V converter
@@ -74,7 +74,7 @@ Previous ESP32-S3 + SPI LCD concept is deprecated.
 2. Source Nextion hardware
 3. Build UI in Nextion Editor
 4. Flash ESP32 bridge firmware
-5. Integrate and validate MQTT -> UART pipeline
+5. Integrate and validate ESPHome API -> UART pipeline
 
 ---
 
@@ -97,7 +97,7 @@ Previous ESP32-S3 + SPI LCD concept is deprecated.
 ```
 Sentinel Hub (10.42.0.1)
        │
-    WiFi / MQTT
+    WiFi / ESPHome API
        │
   ESP32 (bridge)   ← tylko WiFi + UART, brak SPI/I2C do wyświetlacza
        │
@@ -223,7 +223,7 @@ GND          ──→ GND (pin 3)
 | Nextion TX | GPIO16 (RX2) | UART2 receive |
 | Nextion RX | GPIO17 (TX2) | UART2 transmit |
 | Buzzer | GPIO25 | PWM |
-| WiFi | wbudowane | Połączenie z Sentinel Hub (MQTT) |
+| WiFi | wbudowane | Połączenie z Sentinel Hub (ESPHome API) |
 | Status LED | GPIO2 | Built-in |
 
 **GPIO użytych: 3 – minimalistyczne! ✅**
@@ -396,9 +396,9 @@ GND          ──→ GND (pin 3)
 2. Zamówienie Nextion z elty.pl (295 zł)
 3. Pobranie Nextion Editor (nextion.com/download, bezpłatny)
 4. Projektowanie UI w Nextion Editor (ekrany 1–5)
-5. Firmware ESP32 – bridge MQTT → UART
+5. Firmware ESP32 – bridge ESPHome API → UART
 6. Druk 3D obudowy (wymiary z datasheetu Nextion)
-7. Integracja z Sentinel Hub (MQTT subscribe)
+7. Integracja z Sentinel Hub (ESPHome API subscribe)
 8. Testy na akwarium
 
 **Szacowany czas wdrożenia:** 2–3 tygodnie (po zamówieniu Nextion)
