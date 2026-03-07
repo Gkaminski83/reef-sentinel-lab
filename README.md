@@ -1,432 +1,79 @@
-## English (Primary)
+# Reef Sentinel LAB
 
-<p align="center">
-  <img src="logo.png" alt="Reef Sentinel" width="180" />
-</p>
+Open-source reef aquarium controller with modular ESP32 firmware.
 
-<h1 align="center">Reef Sentinel LAB</h1>
+## Current Architecture (March 2026)
 
-**Open-source reef aquarium controller. Automatic KH, Ca, and Mg. No vendor lock-in.**
+- Hub firmware is now in `hub_custom/` (PlatformIO, native web UI).
+- Module communication is direct HTTP (no MQTT broker required).
+- Home Assistant is optional.
+- Cloud sync to `reef-sentinel.com` is supported from Hub.
+- Cloud sync has offline queue + retry backoff (`1m`, `5m`, `15m`).
 
-[![License: MIT](https://img.shields.io/badge/License--MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![ESPHome](https://img.shields.io/badge/Firmware-ESPHome-blue)](https://esphome.io)
-[![Home Assistant](https://img.shields.io/badge/Integration-Home%20Assistant-41BDF5)](https://www.home-assistant.io)
-[![Status](https://img.shields.io/badge/Status-Active%20Development-brightgreen)]()
+## Module Status
 
----
+1. Sentinel Hub: active development, buildable now
+2. Sentinel Chem: integrated with Hub (reporting + control)
+3. Sentinel Photometer: planned integration path, not yet wired in `hub_custom`
+4. Sentinel View: planned
+5. Sentinel Connector: planned
 
-## Why Reef Sentinel?
+## Repository Layout
 
-Reef Sentinel LAB is built as a fully open platform for reef automation:
-- Hardware, firmware, and docs are public.
-- The system is local-first and cloud-optional.
-- Modular ESP32 architecture limits single points of failure.
-- Direct module-to-Hub communication (no MQTT broker, no HA required).
+- `hub_custom/` - current Hub firmware (recommended path)
+- `firmware/` - ESPHome configurations and compatibility files
+- `docs/` - build guides and BOM documentation
 
----
+## Quick Start (Hub, recommended)
 
-## What The System Does
+1. `cd hub_custom`
+2. `pio run -t upload --upload-port COMx`
+3. `pio device monitor --port COMx --baud 115200`
+4. Open `http://reef-sentinel.local` (or Hub IP from serial log)
 
-### Automated Chemistry (Big Three)
-- KH via automated HCl titration (Sentinel Chem)
-- pH continuous monitoring (Sentinel Chem)
-- Ca photometric testing (Sentinel Photometer, planned)
-- Mg photometric testing (Sentinel Photometer, planned)
+## Networking and Provisioning
 
-### 24/7 Monitoring
-- Three-point temperature monitoring (aquarium/sump/chamber)
-- EC/salinity monitoring
+- Hub first tries saved Wi-Fi credentials.
+- If connect fails, captive portal starts as `SentinelHub`.
+- After provisioning, Hub is available via mDNS:
+  - `http://reef-sentinel.local`
 
-### Key Design Choices
-- pH probe storage in RO water between cycles
-- Direct WiFi communication: modules push data to Hub over HTTP
-- Home Assistant is optional (ESPHome API still available)
+## Chem Integration (current)
 
----
+Implemented endpoints in Hub:
 
-## Module Overview
+- `POST /api/module/chem/report`
+- `POST /api/module/chem/settings`
+- `POST /api/module/chem/command`
+- `GET /api/status`
 
-1. Sentinel Hub (Module 1)
-- WiFi coordinator and HTTP data aggregator
-- Data aggregation and cloud sync scheduling
-- OLED status view
-- Remote calibration/control panel for Chem module (pH and pumps)
+Current dashboard cards are Chem-based:
 
-2. Sentinel Chem/Monitor (Module 2)
-- KH titration, pH monitoring, EC and temperature
-- Pump and stirrer control
+- pH
+- KH
+- Temperature (aquarium/sump/room)
+- EC
 
-3. Sentinel Photometer (Module 3, Q3 2026)
-- Dual-channel photometry for Ca and Mg
+## Cloud Integration
 
-4. Sentinel View (Module 4, Q2 2026)
-- Nextion touchscreen local dashboard
+Hub supports:
 
-5. Sentinel Connector (Module 5, TBD)
-- External-controller bridge (Apex/GHL/Hydros)
-
----
-
-## Technical Stack
-- MCU: ESP32-WROOM-32 per module
-- Firmware: ESPHome
-- Internal comms: WiFi + HTTP (module -> Hub)
-- Data format: Hub `web_server` REST endpoints (`/number/.../set`, `/button/.../press`)
-- HA integration: optional, via native ESPHome API
-- Power: 12V DC with local LM2596 per module
-
----
-
-## Build Order
-1. Build Sentinel Hub
-2. Build Sentinel Chem/Monitor (sensor phase)
-3. Extend Chem/Monitor with pumps and fluidics
-4. Integrate and validate on aquarium
-5. Add Sentinel View (optional)
-
----
+- cloud settings update (`/api/cloud/settings`)
+- manual sync (`/api/cloud/sync_now`)
+- periodic snapshot enqueue
+- queued retry delivery when offline
 
 ## Documentation Index
-- docs/sentinel_hub_chem_monitor_BOM.md
-- docs/sentinel_view_BOM.md
-- docs/BUILD_GUIDE_sentinel_hub.md
-- docs/BUILD_GUIDE_sentinel_chem_monitor.md
-- docs/BUILD_GUIDE_sentinel_photometer.md
-- docs/BUILD_GUIDE_sentinel_view.md
-- docs/WIRING_DIAGRAM.md
-- firmware/sentinel_hub.yaml
-- firmware/sentinel_chem.yaml
 
----
-
-## Safety
-- Set each LM2596 to exactly 5.0V before ESP32 connection.
-- Never power ESP32 from USB and LM2596 simultaneously.
-- Test fluidics with RO water before introducing HCl.
-- Use gloves and eye protection when handling acid.
-
----
-
-## License Model
-- Hardware: CERN-OHL-P v2
-- Firmware: MIT
-- Documentation: CC BY 4.0
-- Trademark: Reef Sentinel name/logo protected
-
----
-
-## Project Status (2026-03-06)
-- Sentinel Hub: build-ready
-- Sentinel Chem/Monitor: in active build
-- Sentinel Photometer: planned skeleton
-- Sentinel View: planned
-- PCB phase: planned
-
----
-
-## Polish (PL)
-<p align="center">
-  <img src="logo.png" alt="Reef Sentinel" width="180" />
-</p>
-
-<h1 align="center">Reef Sentinel LAB</h1>
-
-**Open-source reef aquarium controller. Mierzy KH, Ca, Mg automatycznie. Nie stanie się cegłą.**
-
-[![License: MIT](https://img.shields.io/badge/License--MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![ESPHome](https://img.shields.io/badge/Firmware-ESPHome-blue)](https://esphome.io)
-[![Home Assistant](https://img.shields.io/badge/Integration-Home%20Assistant-41BDF5)](https://www.home-assistant.io)
-[![Status](https://img.shields.io/badge/Status-Active%20Development-brightgreen)]()
-
----
-
-## Dlaczego Reef Sentinel?
-
-Pamiętasz **Reef Factory**? Upadłość w 2024. Jeśli dystrybutorzy wyłączą serwery tysiące akwarystów zostanie z cegłami zamiast kontrolerów.
-
-**Z Reef Sentinel to się nie może zdarzyć.**
-
-Cały kod, schematy i dokumentacja są publiczne. Nawet jeśli projekt przestanie być rozwijany – Ty masz wszystko. Działa lokalnie, bez chmury, bez subskrypcji.
-
-| | Reef Sentinel Lab | Neptune Apex + Trident | GHL ProfiLux |
-|--|-------------------|----------------------|--------------|
-| KH / Ca / Mg auto | ✅ | ✅ | Częściowo |
-| Open-source | ✅ | ❌ | ❌ |
-| Lokalny (bez chmury) | ✅ | ❌ | ❌ |
-| Vendor lock-in | ❌ | ✅ | ✅ |
-| Home Assistant native | ✅ | ❌ | ❌ |
-
----
-
-## Co robi Reef Sentinel Lab?
-
-### Automatyczne testy chemii (BIG THREE)
-
-| Parametr | Moduł | Metoda | Częstotliwość | Dokładność |
-|----------|-------|--------|---------------|-----------|
-| **KH** (zasadowość) | Sentinel Chem | Titracja HCl 0.1M | 1–7× dziennie | ±0.2 dKH |
-| **pH** | Sentinel Chem | Elektroda potencjometryczna | co 15 min | ±0.05 |
-| **Ca** (wapń) | Sentinel Photometer | Fotometria Arsenazo III | 1× dziennie | ±10 ppm |
-| **Mg** (magnez) | Sentinel Photometer | Fotometria Calmagite | 1× dziennie | ±30 ppm |
-
-### Monitoring ciągły 24/7
-
-| Parametr | Moduł | Czujnik |
-|----------|-------|---------|
-| Temperatura × 3 | Sentinel Monitor | DS18B20 (akwarium, sump, komora) |
-| Zasolenie/EC | Sentinel Monitor | DFRobot Gravity TDS |
-
-### Triki które wyróżniają ten projekt
-
-**Sonda pH w wodzie RO** – między pomiarami sonda przechowywana jest w wodzie RO zamiast w wodzie morskiej. Żywotność elektrody: **18–36 miesięcy** zamiast 4–6 miesięcy.
-
-**Modularność** – każdy moduł to niezależny ESP32 z własnym firmware. Awaria Sentinel Chem/Monitor nie wpływa na Sentinel View i odwrotnie. Sentinel Hub pełni rolę koordynatora – jego awaria wstrzymuje agregację danych, ale moduły pomiarowe kontynuują pracę lokalnie.
-
-**Integracja HA (opcjonalna)** – przez ESPHome API. System działa bez Home Assistant, a HA można dodać później jako dodatkowy dashboard/automatyzacje.
-
----
-
-## Architektura systemu
-
-```
-                    Internet
-                       │
-              reef-sentinel.com  ←── AI Insights (GPT-4)
-                       │              Dashboard, historia
-                  co 15 min
-                       │
-              ┌────────┴────────┐
-              │  Sieć domowa    │
-              │  (WiFi router)  │
-              └────────┬────────┘
-                       │
-           ┌───────────┴──────────────┐
-           │     SENTINEL HUB         │
-           │     (Module 1)           │
-           │  IP: 10.42.0.1           │
-           │  AP: SentinelHub         │
-           │  HTTP API aggregator    │
-           │  OLED status display     │
-           └────┬──────┬──────┬───────┘
-         WiFi  │      │      │  WiFi
-               │      │      │
-    ┌──────────┘   ┌───┘   └──────────────┐
-    │              │                       │
-┌───┴──────────┐ ┌─┴─────────────┐  ┌────┴──────────┐
-│ SENTINEL     │ │ SENTINEL      │  │ SENTINEL      │
-│ CHEM/MONITOR │ │ PHOTOMETER    │  │ VIEW          │
-│ (Module 2)   │ │ (Module 3)    │  │ (Module 4)    │
-│              │ │               │  │               │
-│ pH + KH auto │ │ Ca + Mg foto  │  │ Nextion 5.0"  │
-│ Temp × 3     │ │ LED 650/520nm │  │ Touch display │
-│ EC/zasolenie │ │ Fotodioda     │  │ Real-time UI  │
-│ Pompki × 4   │ │ ADS1115       │  │               │
-│ Mieszadełko  │ │               │  │               │
-┌──────────────┘ └───────────────┘  └───────────────┘
-   Faza 1 ✅        Faza 2 (Q3 2026)   Faza 2 (Q2 2026)
-
-           ┌──────────────────────────────────┐
-           │  SENTINEL CONNECTOR  (Module 5)  │
-           │  Standalone – nie wymaga Hub     │
-           │  Integracja: Apex / GHL / Hydros │
-           │  → reef-sentinel.com + HA        │
-           └──────────────────────────────────┘
-                      TBD
-```
-
----
-
-## Moduły
-
-### Module 1 – Sentinel Hub ✅ Gotowy do budowy
-WiFi koordynator całego systemu. Tworzy sieć `SentinelHub` (10.42.0.1), zbiera dane ze wszystkich modułów, synchronizuje z reef-sentinel.com co 15 minut.
-Panel lokalny Huba: `http://reef-sentinel.local` (fallback: `http://10.42.0.1`).
-
-**Komponenty:** ESP32 + LM2596 + OLED 0.96" + SD card reader
-
-### Module 2 – Sentinel Chem/Monitor ⚠️ 60% gotowy
-Automatyczna titracja KH, monitoring pH 24/7, temperatura × 3, zasolenie. Fizycznie jeden ESP32, marketingowo dwa produkty.
-
-**Komponenty:** ESP32 + LM2596 + DFRobot pH V2 + EC sensor + DS18B20 × 3 + MOSFET × 5 + pompki × 4 + mieszadełko magnetyczne
-
-### Module 3 – Sentinel Photometer ⏸️ Q3 2026
-Fotometryczny pomiar Ca i Mg. 2-kanałowy: LED 650nm (Ca, arsenazo III) + LED 520nm (Mg, calmagite). ADS1115 16-bit ADC dla precyzji.
-
-### Module 4 – Sentinel View ⏸️ Q2 2026
-Dotykowy panel wyświetlający dane w czasie rzeczywistym. Nextion NX8048P050-011C (5.0", 800×480, własny MCU 200MHz, 120MB flash). Połączenie przez UART – tylko 4 przewody.
-
-### Module 5 – Sentinel Connector ⏸️ TBD
-Moduł dla właścicieli istniejącego sprzętu (Neptune Apex, GHL ProfiLux, Hydros i in.). Działa niezależnie od pozostałych modułów Reef Sentinel Lab – nie wymaga Sentinel Hub. Łączy dane z zewnętrznego kontrolera z reef-sentinel.com i Home Assistant, dodając automatyczną chemię (KH, Ca, Mg) bez wymiany całego systemu.
-
-**Przypadek użycia:** masz Apex i nie chcesz go wyrzucać – Sentinel Connector dodaje automatyczny pomiar KH/Ca/Mg jako uzupełnienie.
-
----
-
-## Specyfikacja techniczna
-
-| | Wartość |
-|--|---------|
-| Mikrokontroler | ESP32-WROOM-32 (każdy moduł) |
-| Firmware | ESPHome |
-| Komunikacja wewnętrzna | WiFi 2.4GHz + HTTP (moduły -> Hub) |
-| Protokół danych | REST endpointy `web_server` ESPHome |
-| Integracja HA | Opcjonalna (ESPHome API) |
-| Cloud | reef-sentinel.com (REST API) |
-| Zasilanie | 12V DC / 5A |
-| Konwersja napięcia | LM2596 (12V→5V, per moduł) |
-| Obudowa docelowa | Takachi SWN11-3-14G (IP67) |
-| PCB | Planowane Q2 2026 (JLCPCB) |
-
----
-
-## Szybki start
-
-### Wymagania wstępne
-
-- Home Assistant (opcjonalnie, ale zalecane)
-- ESPHome (add-on do HA lub standalone)
-- Konto na reef-sentinel.com
-- Multimetr (do ustawienia LM2596 na 5.0V – obowiązkowe!)
-
-### Kolejność budowy
-
-```
-Krok 1 ── Sentinel Hub (Module 1)
-           └── Czas: 2–3h | Trudność: ⭐⭐☆☆☆
-
-Krok 2 ── Sentinel Chem/Monitor (Module 2) – Faza A (sensory)
-           └── Czas: 2–3h | Trudność: ⭐⭐⭐☆☆
-
-Krok 3 ── Sentinel Chem/Monitor (Module 2) – Faza B (pompki + mechanika)
-           └── Czas: 3–4h | Trudność: ⭐⭐⭐☆☆
-
-Krok 4 ── Integracja i testy na akwarium
-           └── Czas: 1–2h
-
-Krok 5 ── Sentinel View (Module 4) – opcjonalny
-           └── Czas: 2–3h + 1–2 dni UI | Trudność: ⭐⭐☆☆☆
-```
-
-### Dokumentacja
-
-| Dokument | Opis |
-|----------|------|
-| [`docs/BOM_sentinel_hub_chem_monitor.md`](docs/sentinel_hub_chem_monitor_BOM.md) | Lista komponentów Module 1+2 |
-| [`docs/BOM_sentinel_view.md`](docs/sentinel_view_BOM.md) | Lista komponentów Module 4 |
-| [`docs/BUILD_GUIDE_sentinel_hub.md`](docs/BUILD_GUIDE_sentinel_hub.md) | Instrukcja montażu Module 1 |
-| [`docs/BUILD_GUIDE_sentinel_chem_monitor.md`](docs/BUILD_GUIDE_sentinel_chem_monitor.md) | Instrukcja montażu Module 2 |
-| [`docs/BUILD_GUIDE_sentinel_photometer.md`](docs/BUILD_GUIDE_sentinel_photometer.md) | Szkielet Module 3 (Q3 2026) |
-| [`docs/BUILD_GUIDE_sentinel_view.md`](docs/BUILD_GUIDE_sentinel_view.md) | Instrukcja montażu Module 4 |
-| [`docs/WIRING_DIAGRAM.md`](docs/WIRING_DIAGRAM.md) | Schematy połączeń całości |
-| [`firmware/sentinel_hub.yaml`](firmware/sentinel_hub.yaml) | ESPHome – Module 1 |
-| [`firmware/sentinel_chem.yaml`](firmware/sentinel_chem.yaml) | ESPHome – Module 2 |
-
----
-
-## Roadmap
-
-```
-Q1 2026  ──  ✅ Projekt i dokumentacja (faza obecna)
-             ✅ Sentinel Hub – gotowy do budowy
-             ⚠️ Sentinel Chem/Monitor – 60% gotowy
-
-Q2 2026  ──  Sentinel Chem/Monitor – 100% + deploy na akwarium
-             Sentinel View – pierwsza wersja UI (Nextion)
-             Beta testing (5–10 użytkowników)
-             Strona www + GitHub public launch
-
-Q3 2026  ──  Sentinel Photometer v0.1 (Ca + Mg)
-             DIY Kit – pierwsze sprzedaże
-             PCB design (KiCad + JLCPCB)
-
-Q4 2026  ──  Sentinel Photometer v1.0 (stabilny)
-             Gotowe urządzenia (plug-and-play)
-             Ekspansja EU (DE, UK)
-
-2027     ──  Dozownik 4-kanałowy (v3)
-             ML predictions (cloud, reef-sentinel.com PRO)
-             Społeczność 200+ użytkowników
-```
-
----
-
-## Model biznesowy i licencja
-
-### Licencja
-
-| Co | Licencja |
-|----|---------|
-| Hardware (schematy, PCB, BOM) | CERN-OHL-P v2 (Permissive) |
-| Firmware (ESPHome YAML, kod) | MIT |
-| Dokumentacja | CC BY 4.0 |
-| Marka "Reef Sentinel" | ™ Trademark (chronione) |
-
-**Wolno Ci:**  
-✅ Zbudować własne urządzenie (DIY)  
-✅ Modyfikować schematy i kod  
-✅ Sprzedawać urządzenia oparte na tym projekcie  
-✅ Tworzyć fork projektu  
-
-**Nie wolno:**  
-❌ Używać nazwy "Reef Sentinel" bez zgody  
-❌ Używać logo projektu  
-
-### Jak zarabiamy (jak Arduino, jak Prusa)
-
-Kod i schematy są darmowe. Zarabiamy na:
-- **Gotowych urządzeniach** – złożone, skalibrowane, z gwarancją
-- **DIY Kitach** – wszystkie komponenty w jednej paczce
-- **Wsparciu premium** – konfiguracja, instalacja on-site
-- **Cloud PRO** – ML predictions na reef-sentinel.com
-
----
-
-## Bezpieczeństwo
-
-> ⚠️ **WAŻNE:** Reef Sentinel to urządzenie DIY. Używasz go na własną odpowiedzialność.
-
-Kluczowe zasady bezpieczeństwa:
-- LM2596 MUSI być ustawiony na **dokładnie 5.0V** multimetrem przed podłączeniem ESP32
-- Nigdy nie podłączaj ESP32 do USB i LM2596 jednocześnie (dwa źródła zasilania = uszkodzenie)
-- HCl (kwas solny) – praca wyłącznie w rękawicach i okularach ochronnych
-- Przy pierwszym teście pompek używaj wody RO, nie HCl
-
----
-
-## Status projektu
-
-| Moduł | Status | Gotowość |
-|-------|--------|---------|
-| Sentinel Hub | 🟢 Gotowy do budowy | 90% |
-| Sentinel Chem/Monitor | 🟡 W budowie | 60% |
-| Sentinel Photometer | ⏸️ Q3 2026 | Szkielet |
-| Sentinel View | ⏸️ Q2 2026 | Zaplanowany |
-| Sentinel Connector | ⏸️ TBD | Koncepcja |
-| PCB (wszystkie moduły) | ⏸️ Q2 2026 | Planowanie |
-| reef-sentinel.com | 🟢 Live | Operacyjny |
-
----
-
-## Społeczność i wsparcie
-
-- 🌐 **Strona:** [reef-sentinel.com](https://reef-sentinel.com)
-- đź'¬ **Forum:** forum.reef-sentinel.com *(wkrótce)*
-- đź"§ **Kontakt:** opensource@reefsentinel.pl
-- 🐛 **Bugi:** GitHub Issues
-- đź'ˇ **Propozycje:** GitHub Discussions
-
----
-
-## Podziękowania
-
-Projekt czerpie inspirację z:
-- [reef-pi](https://reef2reef.com/oss/reef-pi/) – pionier open-source reef controllera
-- [ReefManager](https://reefmanager.eu) – DE community, świetna dokumentacja
-- [ESPHome](https://esphome.io) – bez którego ten projekt byłby 10× trudniejszy
-- Wszystkich akwarystów którzy testowali i zgłaszali bugi
-
----
-
-*Reef Sentinel Lab – Open-source aquarium controller*  
-*reef-sentinel.com | github.com/reef-sentinel*  
-*Last updated: 2026-03-06*
+- `docs/BUILD_GUIDE_sentinel_hub.md`
+- `docs/BUILD_GUIDE_sentinel_chem_monitor.md`
+- `docs/BUILD_GUIDE_sentinel_photometer.md`
+- `docs/BUILD_GUIDE_sentinel_view.md`
+- `docs/BUILD_GUIDE_sentinel_connector.md`
+- `docs/WIRING_DIAGRAM.md`
+- `hub_custom/README.md`
+
+## Notes
+
+- `firmware/secrets.yaml` is not used by `hub_custom`.
+- For `hub_custom`, runtime configuration is stored in ESP32 NVS (Preferences).

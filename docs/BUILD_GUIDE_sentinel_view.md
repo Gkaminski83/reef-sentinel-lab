@@ -1,708 +1,530 @@
 ## English (Primary)
 
-# Reef Sentinel Lab - Build Guide
-## Module 4: Sentinel View (Touch Display)
+# Reef Sentinel – Build Guide
+## Module 4: Sentinel View
 
 Version: 1.0
-Date: 2026-03-06
-Status: Phase 2 (Q2 2026)
+Date: 2026-03-07
+Planned build start: Q2 2026
+Estimated build time: 2–3h hardware + 1–2 days UI
+Difficulty: Basic
+Requires: Module 1 (Sentinel Hub) operational
 
 ---
 
 ## Purpose
 
-Sentinel View is the local touchscreen UI for live reef telemetry and manual actions.
+Sentinel View is a local touchscreen dashboard displaying real-time data from the
+entire Reef Sentinel Lab system. The Nextion NX8048P050-011C has its own processor:
+the ESP32 acts only as a WiFi→UART bridge.
 
-Core features:
-- live dashboard values (pH, KH, temperature, salinity)
-- trend charts
-- manual test triggers
-- alerts and configurable thresholds
-
----
-
-## Hardware Architecture
-- Nextion NX8048P050-011C display
-- ESP32 bridge receiving ESPHome API and sending UART commands
-- LM2596 12V->5V shared rail
-- optional buzzer for alert sounds
+| Feature              | Data source         | Notes                        |
+|----------------------|---------------------|------------------------------|
+| pH current           | Sentinel Chem (M2)  | Refresh every 15 min         |
+| KH last result       | Sentinel Chem (M2)  | Date and time of test        |
+| Temperature ×3       | Sentinel Chem (M2)  | Tank / sump / chamber        |
+| EC / salinity        | Sentinel Chem (M2)  |                              |
+| Ca and Mg (when M3)  | Sentinel Photometer | Q3 2026                      |
+| System status        | Sentinel Hub        | Online/offline per module    |
+| Start KH test        | → Hub → Chem        | Touchscreen button           |
 
 ---
 
-## Wiring Summary
-- GPIO17 (ESP TX2) -> Nextion RX
-- GPIO16 (ESP RX2) <- Nextion TX
-- VIN/5V -> Nextion 5V
-- GND -> Nextion GND
-- optional buzzer on GPIO25
+## Required Hardware
+
+- Nextion Intelligent Display NX8048P050-011C (5.0", 800×480, capacitive touch)
+- ESP32 DevKit 30-pin (ESP-WROOM-32)
+- LM2596 Buck Converter (12V→5V with display)
+- 12V/2A power supply (dedicated)
+- Dupont F-F jumper wires ×4
+- Passive buzzer 5V (85dB, PWM)
+- 3D printed enclosure, PETG (2 parts: front + back)
+- Neodymium magnets N52, 10mm × 2mm ×4 (mount to cabinet)
+- Ball joint M6 (tilt adjustment)
+- M2.5 × 6mm screws ×4 + brass heat inserts M2.5 ×4
+
+---
+
+## Safety First
+
+- Never connect USB and LM2596 power simultaneously.
+- Tune LM2596 to exactly 5.0V before connecting ESP32 or Nextion.
+- Nextion + ESP32 combined draw ~750 mA – ensure LM2596 output is stable.
+
+---
+
+## GPIO Assignment (ESP32 bridge)
+
+| Function     | GPIO       | Interface | Notes              |
+|--------------|------------|-----------|--------------------|
+| Nextion RX   | GPIO17 (TX2) | UART2   | ESP32 transmits    |
+| Nextion TX   | GPIO16 (RX2) | UART2   | ESP32 receives     |
+| Buzzer       | GPIO25     | PWM       | Alert tones        |
+| Status LED   | GPIO2      | Digital   | Built-in           |
+| WiFi         | Built-in   | –         | Connect to SentinelHub AP |
+
+Only 3 GPIO used. ✅
 
 ---
 
 ## Build Steps
-1. Calibrate LM2596 output to 5.0V
-2. Wire ESP32 and Nextion UART/power
-3. Flash ESPHome bridge firmware
-4. Build UI in Nextion Editor
-5. Upload .tft via UART or microSD
-6. Validate ESPHome API-driven updates on screen
+
+### 1. Power stage
+1. Connect 12V supply to LM2596 (IN+, IN–).
+2. Adjust potentiometer to 5.0V ±0.1V (confirm with multimeter).
+3. Power off before connecting ESP32 or Nextion.
+4. Connect: LM2596 OUT+ → ESP32 VIN, OUT– → GND.
+5. Nextion and ESP32 share the same 5V output from LM2596.
+
+### 2. Nextion wiring (UART)
+
+| ESP32 pin      | Nextion pin        | Wire colour (suggested) |
+|----------------|--------------------|------------------------|
+| GPIO17 (TX2)   | RX (connector pin 2) | Yellow               |
+| GPIO16 (RX2)   | TX (connector pin 1) | Green                |
+| GND            | GND (pin 3)        | Black                  |
+| 5V (LM2596)    | 5V (pin 4)         | Red                    |
+
+> Always cross TX/RX: ESP32 TX → Nextion RX, ESP32 RX → Nextion TX.
+> This is the most common wiring mistake.
+
+### 3. Buzzer wiring
+- Buzzer SIG/+ → GPIO25
+- Buzzer GND/– → GND
+
+### 4. Firmware
+- Flash sentinel_view.yaml via USB (12V disconnected).
+- After flash: connect 12V, verify WiFi connected to SentinelHub in logs.
+
+### 5. Nextion UI upload
+1. Design screens in Nextion Editor (nextion.com/download, free).
+2. Compile: File → TFT File Output.
+3. Copy .tft file to microSD card (FAT32, max 32 GB).
+4. Insert SD card into Nextion slot.
+5. Power Nextion – auto-flashes UI from SD (~30 s).
+6. Remove SD card – Nextion boots with new UI.
+
+### 6. Mechanical assembly
+1. Print PETG enclosure (30% infill recommended).
+2. Insert M2.5 brass heat inserts with soldering iron.
+3. Slide Nextion into front panel, secure with M2.5 screws.
+4. Mount ESP32 + LM2596 inside back panel with 3M VHB tape.
+5. Route 4 UART wires from ESP32 to Nextion connector.
+6. Close enclosure.
+7. Attach ball joint M6 to base of enclosure.
+8. Epoxy neodymium magnets N52 into base plate (4 magnets for secure hold).
 
 ---
 
-## UI Structure
-Suggested pages:
-- Home
-- Charts
-- Tests
-- Settings
-- Alerts
+## Nextion Display Specification
+
+| Parameter     | Value                         |
+|---------------|-------------------------------|
+| Diagonal      | 5.0"                          |
+| Resolution    | 800 × 480 px                  |
+| MCU           | Cortex-M4, 200 MHz (own CPU!) |
+| Flash         | 120 MB (UI, graphics, fonts)  |
+| Touch         | Capacitive (smartphone-like)  |
+| RTC           | Built-in (no NTP needed)      |
+| Interface     | UART (4 wires only)           |
+| Power         | 5V DC, max 500 mA             |
+| Module size   | 132.0 × 82.8 × 12.9 mm        |
 
 ---
 
-## Firmware Role
-- subscribe to Hub/Chem Home Assistant entities
-- convert payloads to Nextion component commands
-- send commands with Nextion terminator bytes
+## Planned UI Screens
+
+| Screen | Name          | Content                                                    |
+|--------|---------------|------------------------------------------------------------|
+| 0      | Home          | pH, KH, Temp ×3, EC – colour status indicators OK/WARN/ALARM |
+| 1      | Charts        | 7-day trend graphs for pH and temperature                  |
+| 2      | Tests         | Start KH Test / Start Ca Test buttons + live test status   |
+| 3      | Settings      | Test schedule, calibration values, WiFi info               |
+| 4      | Alerts        | Last alerts list + buzzer mute button                      |
 
 ---
 
-## Mechanical Notes
-- 3D-printed enclosure sized for NX8048P050
-- magnetic base + angle-adjustable mount recommended
-
----
-
-## Troubleshooting
-- no display: verify 5V rail and flashed UI
-- no updates: check UART TX/RX crossing and ESPHome API connectivity
-- instability: verify rail current headroom and update frequency throttling
-
----
-
-## Done Criteria
-- display boots consistently
-- real-time values update from ESPHome API
-- touch navigation works
-- optional buzzer test works
-
----
-
-## Polish (PL)
-# Reef Sentinel Lab – BUILD GUIDE
-## Module 4: Sentinel View (Wyświetlacz dotykowy)
-
-> **Version:** 1.0  
-> **Data:** 2026-03-06  
-> **Status:** ⏸️ Faza 2 – Q2 2026  
-> **Czas montażu:** 2–3 godziny (hardware) + 1–2 dni (UI w Nextion Editor)  
-> **Poziom trudności:** ⭐⭐☆☆☆ (Podstawowy – hardware prostszy niż Module 2)  
-> **Wymaganie wstępne:** Sentinel Hub + Sentinel Chem/Monitor działające na akwarium ✅
-
----
-
-## CO TEN MODUŁ ROBI
-
-Sentinel View to lokalny panel dotykowy systemu Reef Sentinel Lab.  
-Wyświetla dane w czasie rzeczywistym bez potrzeby otwierania telefonu czy laptopa.
-
-**Funkcje:**
-- Aktualne odczyty pH, KH, temperatury, zasolenia – z kolorowym statusem
-- Wykresy trendów (7/30 dni) bezpośrednio na wyświetlaczu
-- Ręczne uruchamianie testów (przycisk "Start KH Test")
-- Alerty wizualne + dźwiękowe gdy parametr poza normą
-- Zegar/data (RTC wbudowany w Nextion – bez baterii zewnętrznej)
-- Konfiguracja harmonogramu testów
-
----
-
-## ARCHITEKTURA – JAK TO DZIAŁA
-
-```
-Sentinel Hub (10.42.0.1)
-        │
-     WiFi ESPHome API
-        │
-   ESP32 (bridge)
-   ┌────┴────────────────────────────────┐
-   │  Odbiera dane z ESPHome API               │
-   │  Formatuje komendy Nextion          │
-   │  Wysyła przez UART                  │
-   └────┬────────────────────────────────┘
-        │ UART (TX/RX)  ← tylko 4 przewody
-        │
-   ┌────▼────────────────────────────────┐
-   │  Nextion NX8048P050-011C            │
-   │  ┌──────────────────────────────┐   │
-   │  │  Własny MCU Cortex-M4 200MHz │   │
-   │  │  120MB Flash (UI + grafikA)  │   │
-   │  │  Pojemnościowy touch 5.0"    │   │
-   │  │  RTC wbudowany               │   │
-   │  └──────────────────────────────┘   │
-   └─────────────────────────────────────┘
-```
-
-**Dlaczego Nextion, a nie ESP32 + LCD IPS:**
-
-| | Nextion NX8048P050 | ESP32-S3 + IPS LCD |
-|--|-------------------|-------------------|
-| Podłączenie | 4 przewody (UART) | 6–8 przewodów (SPI) |
-| Projektowanie UI | Drag & drop (Nextion Editor) | Kod LVGL/GFX (trudne) |
-| Czas wdrożenia UI | 3–5 dni | 2–4 tygodnie |
-| RAM dla renderingu | 512KB własne | Dzielone z WiFi |
-| RTC | Wbudowany | Zewnętrzny moduł |
-| Cena | 295 zł | ~90 zł (ale więcej pracy) |
-
----
-
-## KOMPONENTY (z BOM)
-
-| Komponent | Model | Dostawca | Cena | Uwagi |
-|-----------|-------|----------|------|-------|
-| Nextion Display | NX8048P050-011C | elty.pl | 295 zł | 5.0", 800×480, touch |
-| ESP32 DevKit | ESP-WROOM-32, 30-pin | Botland | 25 zł | WiFi bridge |
-| LM2596 | 12V→5V buck | Botland | 8 zł | ⚠️ Ustaw 5.0V! |
-| Buzzer pasywny | 5V, 85dB | Botland | 3 zł | Alerty dźwiękowe |
-| Przewody Dupont | F-F 20cm | Botland | 1 zł | 4 szt. do Nextion |
-| Obudowa 3D | PLA/PETG, custom | Printuj3D.pl | 20 zł | Pod wymiary Nextion |
-| Magnesy N52 | 10×2mm | AliExpress | 2 zł | Mocowanie magnetyczne |
-| Śruby M2.5 × 6mm | + wkładki mosiężne | AliExpress | 2 zł | |
-
----
-
-## ETAP 1 – ZASILANIE (LM2596)
-
-**Sentinel View ma własny, dedykowany zasilacz 12V** – osobny od pozostałych modułów. Moduły są elektrycznie niezależne i komunikują się wyłącznie przez WiFi.
-
-Proces ustawiania LM2596 identyczny jak w poprzednich modułach.
-
-### Krok 1.1 – Schemat zasilania
-
-```
-Zasilacz 12V (dedykowany Sentinel View)
-    │
-    ├─ (+12V) ──→ LM2596 [IN+]
-    └─ ( GND) ──→ LM2596 [IN–]
-                      │
-               LM2596 [OUT+] 5V ───┬──→ ESP32 [VIN]
-               LM2596 [OUT–] GND ──┴──→ ESP32 [GND]
-                                   │
-                                   └──→ Nextion [5V pin 4]
-                                       Nextion [GND pin 3]
-```
-
-> ⚠️ Nextion i ESP32 dzielą jedno 5V z LM2596.  
-> Łączny pobór: ~750mA (Nextion 500mA + ESP32 250mA) – LM2596 daje radę.
-
-### Krok 1.2 – Ustaw LM2596 na 5.0V
-
-Multimetr → DC V → 20V zakres → OUT+ i OUT– → kręć potencjometrem → cel 5.0V ±0.1V.  
-Dopiero po ustawieniu podłącz ESP32 i Nextion.
-
-### Checklist Etap 1
-
-```
-☐ LM2596 IN+ ← 12V, IN– ← GND
-☐ Napięcie OUT+ / OUT– = 5.0V ±0.1V
-☐ Zasilacz wyłączony przed podłączeniem ESP32 i Nextion
-```
-
----
-
-## ETAP 2 – POŁĄCZENIE ESP32 ↔ NEXTION (UART)
-
-### Gdzie są piny na Nextion?
-
-Nextion NX8048P050 ma 4-pinowy złącz po lewej stronie tylnej płyty (lub kabel z 4 przewodami w zestawie):
-
-```
-Nextion (tył modułu):
-┌─────────────────────────────────────┐
-│                                     │
-│  [TX] [RX] [GND] [5V]              │
-│   1    2    3     4                 │
-│                                     │
-└─────────────────────────────────────┘
-Pin 1: TX  (wyjście danych z Nextion)
-Pin 2: RX  (wejście danych do Nextion)
-Pin 3: GND
-Pin 4: 5V
-```
-
-### Schemat połączeń UART
-
-```
-ESP32                    Nextion
-GPIO17 (TX2) ───────────→ RX  (pin 2)
-GPIO16 (RX2) ←─────────── TX  (pin 1)
-GND          ───────────→ GND (pin 3)
-5V (VIN)     ───────────→ 5V  (pin 4)
-```
-
-> ⚠️ Uwaga na skrzyżowanie: TX ESP32 → RX Nextion, RX ESP32 ← TX Nextion.  
-> To najczęstszy błąd przy UART – jeśli Nextion nie reaguje, zamień TX i RX.
-
-> ✅ Nextion pracuje na poziomach TTL 3.3V/5V – bezpośrednie połączenie z ESP32 (3.3V logic) jest bezpieczne. Brak potrzeby konwertera poziomów.
-
-### Kabel po kablu
-
-| Z (ESP32) | Do (Nextion) | Kolor sugerowany |
-|-----------|-------------|-----------------|
-| GPIO17 (TX2) | Pin 2 (RX) | Żółty |
-| GPIO16 (RX2) | Pin 1 (TX) | Biały |
-| GND (pin 14) | Pin 3 (GND) | Czarny |
-| VIN/5V (pin 15) | Pin 4 (5V) | Czerwony |
-
-### Checklist Etap 2
-
-```
-☐ ESP32 TX (GPIO17) → Nextion RX (pin 2)
-☐ ESP32 RX (GPIO16) ← Nextion TX (pin 1)
-☐ ESP32 GND → Nextion GND (pin 3)
-☐ ESP32 VIN/5V → Nextion 5V (pin 4)
-☐ Nextion podświetlenie świeci po podłączeniu zasilania
-```
-
----
-
-## ETAP 3 – BUZZER (OPCJONALNIE)
-
-Buzzer pasywny podłączony do ESP32 – alerty dźwiękowe gdy parametr poza normą.
-
-```
-ESP32 GPIO25 ──→ Buzzer (+)
-ESP32 GND    ──→ Buzzer (–)
-```
-
-> Buzzer pasywny (nie aktywny) – sterowany PWM, pozwala regulować ton i czas trwania dźwięku.
-
----
-
-## ETAP 4 – GPIO ASSIGNMENT
-
-```
-                    ┌─────────────────┐
-               3V3 ─┤ 1           30 ├─ GND
-               EN  ─┤ 2           29 ├─ GPIO23
-             VP/36 ─┤ 3           28 ├─ GPIO22
-             VN/39 ─┤ 4           27 ├─ GPIO21
-             GPIO34─┤ 5           26 ├─ GPIO19
-             GPIO35─┤ 6           25 ├─ GPIO18
-             GPIO32─┤ 7           24 ├─ GPIO5
-             GPIO33─┤ 8           23 ├─ GPIO17  ← Nextion RX
-             GPIO25─┤ 9  ESP32    22 ├─ GPIO16  ← Nextion TX
-  Buzzer     GPIO26─┤ 10          21 ├─ GPIO4
-             GPIO27─┤ 11          20 ├─ GPIO0
-             GPIO14─┤ 12          19 ├─ GPIO2   ← LED status
-             GPIO12─┤ 13          18 ├─ GPIO15
-               GND ─┤ 14          17 ├─ GND
-         5V   VIN  ─┤ 15          16 ├─ 3V3
-                    └──────[USB]──────┘
-```
-
-| GPIO | Funkcja | Uwagi |
-|------|---------|-------|
-| GPIO16 | Nextion TX (UART2 RX) | Odbiera dane z Nextion |
-| GPIO17 | Nextion RX (UART2 TX) | Wysyła dane do Nextion |
-| GPIO25 | Buzzer PWM | Alerty dźwiękowe |
-| GPIO2 | Status LED | Wbudowana dioda |
-| WiFi | SentinelHub ESPHome API | Połączenie z Hub |
-
-**GPIO użytych: 3 – minimalistyczne ✅**
-
----
-
-## ETAP 5 – FIRMWARE ESP32 (ESPHome)
-
-### Konfiguracja YAML
+## ESPHome sentinel_view.yaml (skeleton)
 
 ```yaml
 esphome:
   name: sentinel-view
-  friendly_name: "Sentinel View"
+  friendly_name: Sentinel View
 
 esp32:
   board: esp32dev
-  framework:
-    type: arduino
-
-logger:
-  level: INFO
-  # Wyłącz logi UART2 żeby nie zakłócały komunikacji z Nextion
-  baud_rate: 0
-
-api:
-  encryption:
-    key: !secret api_encryption_key
-
-ota:
-  password: !secret ota_password
 
 wifi:
-  ssid: "SentinelHub"
-  password: "reef1234"
+  ssid: SentinelHub
+  password: !secret wifi_ap_password
 
-# MQTT removed in no-broker architecture
-# Data path: ESPHome API via Home Assistant
-# Brak subskrypcji topiców na urządzeniu.
-# Sentinel View pobiera dane z encji Home Assistant.
-    # Odbiór temperatury
-    - topic: reef/chem/temp/aquarium
-      then:
-        - uart.write:
-            id: nextion_uart
-            data: !lambda |-
-              std::string cmd = "temp1.txt=\"" + x + "°C\"";
-              cmd += "\xff\xff\xff";
-              return std::vector<uint8_t>(cmd.begin(), cmd.end());
-    # Odbiór KH
-    - topic: reef/chem/kh/value
-      then:
-        - uart.write:
-            id: nextion_uart
-            data: !lambda |-
-              std::string cmd = "kh.txt=\"" + x + " dKH\"";
-              cmd += "\xff\xff\xff";
-              return std::vector<uint8_t>(cmd.begin(), cmd.end());
-
-# UART2 do komunikacji z Nextion
 uart:
   id: nextion_uart
   tx_pin: GPIO17
   rx_pin: GPIO16
   baud_rate: 9600
 
-# Buzzer
-output:
-  - platform: ledc
-    pin: GPIO25
-    id: buzzer_output
-
-rtttl:
-  output: buzzer_output
-  id: buzzer
-
-# Status LED
-status_led:
-  pin:
-    number: GPIO2
-    inverted: false
-
-binary_sensor:
-  - platform: status
-    name: "Sentinel View Status"
-
-button:
-  - platform: restart
-    name: "Sentinel View Restart"
-  # Przycisk testu dźwięku (z HA)
-  - platform: template
-    name: "Sentinel View Buzzer Test"
-    on_press:
-      - rtttl.play: "alert:d=8,o=5,b=180:c,e,g"
-```
-
-### Krok 5.1 – Wgraj firmware
-
-1. Podłącz ESP32 do komputera USB (**zasilacz 12V wyłączony**)
-2. ESPHome → Install → Plug into this computer
-3. Poczekaj na kompilację i wgranie
-4. W logach po boocie:
-```
-[I][wifi:290]: Connected to SentinelHub
-[I][api:000]: ESPHome API connected to 10.42.0.1
+display:
+  - platform: nextion
+    id: nextion_display
+    uart_id: nextion_uart
+    update_interval: 30s
+    lambda: |-
+      // update screen components with current values
 ```
 
 ---
 
-## ETAP 6 – UI W NEXTION EDITOR
+## Troubleshooting
 
-### Krok 6.1 – Pobierz Nextion Editor
+### Nextion displays nothing
+- Verify 5V on Nextion connector with multimeter (min 4.8V).
+- Check whether UI was uploaded (.tft via SD card) – blank screen = no UI.
+- Re-flash UI via SD card.
 
-- Adres: `nextion.com/nextion-editor`
-- Wersja: v1.67 lub nowsza
-- System: Windows (lub Wine na Linux/Mac)
-- Koszt: bezpłatny
+### Data not updating on screen
+- Check ESPHome logs: WiFi connected to SentinelHub?
+- Verify TX/RX cross-wiring: TX→RX, RX→TX (not TX→TX).
+- Confirm baud_rate matches on both sides (default 9600).
 
-### Krok 6.2 – Utwórz nowy projekt
-
-1. Uruchom Nextion Editor
-2. **New Project** → wybierz model: `NX8048P050_011C` (P-series, 5.0")
-3. Orientacja: **Landscape** (pozioma)
-4. Encoding: **UTF-8**
-
-### Krok 6.3 – Planowane ekrany
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                   SENTINEL VIEW                         │
-│              Mapa ekranów (5 stron)                     │
-│                                                         │
-│  [HOME] ←→ [CHARTS] ←→ [TESTS] ←→ [SETTINGS] ←→ [ALERTS] │
-│     0          1           2           3           4    │
-│                                                         │
-│  Nawigacja: pasek dolny z ikonami (stały na wszystkich) │
-└─────────────────────────────────────────────────────────┘
-```
-
-**Strona 0 – HOME (główny widok):**
-```
-┌────────────────────────────────────────┐
-│  🐠 Reef Sentinel   14:32  ●●●WiFi    │  ← header
-├────────────┬────────────┬──────────────┤
-│    pH      │    KH      │    TEMP      │
-│   8.15     │  8.2 dKH   │   25.3°C    │
-│   ●OK      │   ●OK      │    ●OK      │
-├────────────┴────────────┴──────────────┤
-│   Zasolenie: 35.1 ppt    EC: 52.8 mS  │
-├────────────────────────────────────────┤
-│  Ostatni test KH: dziś 08:00           │
-│  Następny: jutro 08:00                 │
-├────────────────────────────────────────┤
-│  [⌂ Home] [📈 Charts] [🧪 Tests] [⚙️] │  ← nawigacja
-└────────────────────────────────────────┘
-```
-
-**Strona 1 – CHARTS:**
-```
-┌────────────────────────────────────────┐
-│  📈 Wykresy trendów        [7d] [30d]  │
-├────────────────────────────────────────┤
-│  pH ────────────────────────────────── │
-│   8.20 ┤                               │
-│   8.10 ┤  ~~~~~~~~~~~~~~~~~~~~         │
-│   8.00 ┤                               │
-├────────────────────────────────────────┤
-│  KH ────────────────────────────────── │
-│   8.5 ┤    ●    ●    ●    ●    ●      │
-│   8.0 ┤                               │
-├────────────────────────────────────────┤
-│  [⌂ Home] [📈 Charts] [🧪 Tests] [⚙️] │
-└────────────────────────────────────────┘
-```
-
-**Strona 2 – TESTS:**
-```
-┌────────────────────────────────────────┐
-│  🧪 Testy ręczne                       │
-├────────────────────────────────────────┤
-│                                        │
-│  ┌──────────────────────────────────┐  │
-│  │   ▶ START TEST KH               │  │
-│  └──────────────────────────────────┘  │
-│                                        │
-│  ┌──────────────────────────────────┐  │
-│  │   ▶ START POMIAR pH             │  │
-│  └──────────────────────────────────┘  │
-│                                        │
-│  Status: Oczekiwanie...               │
-│  Postęp: [░░░░░░░░░░░░░░░░░░░░]  0%   │
-├────────────────────────────────────────┤
-│  [⌂ Home] [📈 Charts] [🧪 Tests] [⚙️] │
-└────────────────────────────────────────┘
-```
-
-**Strona 3 – SETTINGS:**
-```
-┌────────────────────────────────────────┐
-│  ⚙️ Ustawienia                         │
-├────────────────────────────────────────┤
-│  Test KH: co [3] dni  [–] [+]         │
-│  pH monit: co [4] godz  [–] [+]       │
-│  Alert pH min: [7.9]    [–] [+]       │
-│  Alert pH max: [8.4]    [–] [+]       │
-│  Alert KH min: [7.0]    [–] [+]       │
-│  Alert temp max: [27.0]  [–] [+]      │
-│                                        │
-│  [ZAPISZ]         [RESET DO DOMYŚLNYCH]│
-├────────────────────────────────────────┤
-│  [⌂ Home] [📈 Charts] [🧪 Tests] [⚙️] │
-└────────────────────────────────────────┘
-```
-
-### Krok 6.4 – Upload UI na Nextion
-
-**Metoda 1 – przez UART (kabel USB-TTL):**
-1. Podłącz USB-TTL adapter: TX→RX Nextion, RX→TX Nextion, GND→GND, 5V→5V
-2. W Nextion Editor: **Upload** → wybierz port COM → kliknij Upload
-3. Poczekaj na transfer (~1–2 min przy 9600 baud)
-
-**Metoda 2 – przez kartę microSD (szybsza):**
-1. W Nextion Editor: **File** → **TFT file output** → zapisz plik `.tft`
-2. Skopiuj plik `.tft` na kartę microSD (FAT32, max 32GB)
-3. Włóż kartę do gniazda microSD w Nextion
-4. Włącz zasilanie – Nextion automatycznie wykryje i zainstaluje UI
-5. Po instalacji wyciągnij kartę (Nextion nie bootuje z kartą w środku)
-
-> ✅ Metoda microSD jest szybsza i wygodniejsza przy kolejnych aktualizacjach UI.
-
-### Checklist Etap 6
-
-```
-☐ Nextion Editor zainstalowany
-☐ Projekt skonfigurowany dla modelu NX8048P050_011C
-☐ Strona HOME: etykiety pH, KH, temp, zasolenie
-☐ Strona TESTS: przyciski start testu
-☐ Strona SETTINGS: pola konfiguracji
-☐ UI wgrany na Nextion (UART lub microSD)
-☐ Nextion wyświetla UI po włączeniu
-```
+### Buzzer not sounding
+- Buzzer SIG/+ → GPIO25, GND → GND.
+- Passive buzzer requires PWM signal – HIGH/LOW alone won't work.
+- Measure GPIO25 during alert: should oscillate (PWM visible on multimeter AC range).
 
 ---
 
-## ETAP 7 – OBUDOWA
+## Done Criteria
+- LM2596 stable at 5.0V confirmed by multimeter
+- Nextion receives 4.9–5.1V on connector
+- ESP32 boot OK, WiFi connected to SentinelHub
+- UI loaded on Nextion (Home screen visible)
+- UART: live data from Hub visible on screen (pH, temp)
+- Buzzer responds to test alert from ESPHome
+- Enclosure assembled and secure on magnetic base
 
-### Wymiary Nextion NX8048P050-011C
+---
+
+## Related Documents
+- `BOM_sentinel_view.md` – full component list with prices
+- `BUILD_GUIDE_sentinel_connector.md` – Module 5 build guide
+- `firmware/sentinel_view.yaml` *(to be created)*
+
+---
+
+## Polish (PL)
+
+# Reef Sentinel – BUILD GUIDE
+## Module 4: Sentinel View (Panel dotykowy)
+
+> **Version:** 1.0
+> **Data:** 2026-03-07
+> **Planowany start budowy:** Q2 2026
+> **Czas montażu:** 2–3h hardware + 1–2 dni UI w Nextion Editor
+> **Poziom trudności:** ★★☆☆☆ Podstawowy
+> **Wymaga:** Modułu 1 (Sentinel Hub) działającego
+
+---
+
+## ZANIM ZACZNIESZ
+
+### Co ten moduł robi
+
+Sentinel View to lokalny panel dotykowy – wyświetla dane z całego systemu Reef Sentinel Lab
+w czasie rzeczywistym. Nextion NX8048P050-011C ma własny procesor Cortex-M4 200MHz i 120MB
+flash na grafikę – ESP32 pełni tu tylko rolę WiFi→UART bridge. Połączenie: 4 przewody.
+
+### Dlaczego Nextion zamiast ESP32-S3 + IPS LCD?
+
+| | Nextion NX8048P050 | ESP32-S3 + IPS LCD |
+|--|-------------------|--------------------|
+| Firmware UI | Nextion Editor (drag & drop) | LVGL + własny kod |
+| Czas wdrożenia UI | 3–5 dni | 2–4 tygodnie |
+| Połączenie | 4 przewody UART | 30+ przewodów SPI |
+| Jakość efektu | Profesjonalna od razu | Zależy od umiejętności |
+| Ryzyko techniczne | Niskie | Wysokie (SPI timing, RAM) |
+| Koszt | ~295 zł | ~148 zł |
+
+---
+
+## ⚠️ ZASADY BEZPIECZEŃSTWA
+
+- Nigdy nie podłączaj ESP32 do USB i LM2596 jednocześnie
+- Ustaw LM2596 na 5.0V multimetrem ZANIM podłączysz ESP32 lub Nextion
+- Nextion + ESP32 pobierają łącznie ~750 mA – LM2596 musi być stabilny
+
+---
+
+## LISTA KOMPONENTÓW (~375 zł)
+
+| Komponent | Model/Spec | Ilość | Cena | Gdzie kupić |
+|-----------|-----------|-------|------|-------------|
+| Nextion Intelligent Display | NX8048P050-011C, 5.0", 800×480 | 1 | ~295 zł | elty.pl (Kraków) |
+| ESP32 DevKit 30-pin | ESP-WROOM-32 | 1 | ~25 zł | Botland / Kamami |
+| LM2596 Buck Converter | 12V→5V z wyświetlaczem | 1 | ~8 zł | Botland / AliExpress |
+| Zasilacz 12V/2A | Dedykowany dla View | 1 | ~20 zł | Botland / Allegro |
+| Przewody Dupont F-F 20cm | | 4 szt. | ~0.40 zł | Botland |
+| Buzzer pasywny 5V | 85dB, sterowany PWM | 1 | ~3 zł | Botland / AliExpress |
+| Obudowa PETG 3D | 2 części: przód + tył | 1 kpl | ~15 zł | Własna drukarka / Printuj3D.pl |
+| Magnesy neodymowe N52 | 10mm × 2mm | 4 szt. | ~2 zł | AliExpress / Allegro |
+| Przegub kulowy M6 | Regulowany kąt widzenia | 1 | ~8 zł | AliExpress |
+| Śruby M2.5 × 6mm | + wkładki gwintowane mosiężne | 4+4 | ~2 zł | AliExpress / lokalny |
+
+### Specyfikacja Nextion NX8048P050-011C
+
+| Parametr | Wartość |
+|---------|---------|
+| Przekątna | 5.0" |
+| Rozdzielczość | 800 × 480 px |
+| MCU | Cortex-M4, 200 MHz (własny procesor!) |
+| Flash | 120 MB (UI, grafika, animacje) |
+| Touch | Pojemnościowy (jak smartfon) |
+| RTC | Wbudowany (data i czas bez NTP) |
+| Interfejs z ESP32 | UART – tylko 4 przewody |
+| Zasilanie | 5V DC, max 500 mA |
+| Wymiary modułu | 132.0 × 82.8 × 12.9 mm |
+
+---
+
+## MAPOWANIE GPIO (ESP32 – bridge)
+
+| Funkcja | GPIO | Interfejs | Uwagi |
+|---------|------|-----------|-------|
+| Nextion RX | GPIO17 (TX2) | UART2 | ESP32 nadaje |
+| Nextion TX | GPIO16 (RX2) | UART2 | ESP32 odbiera |
+| Buzzer | GPIO25 | PWM | Alarmy dźwiękowe |
+| Status LED | GPIO2 (built-in) | Digital | Wbudowana |
+| WiFi | Wbudowane | – | Łączy z AP SentinelHub |
+
+**GPIO użytych: 3 ✅**
+
+---
+
+## ETAP 1 – ZASILANIE
+
+1. Podłącz zasilacz 12V do LM2596 (IN+, IN–) – **ESP32 i Nextion jeszcze niepodłączone**
+2. Multimetr: zakres DC V 20, czarna sonda COM, czerwona V/Ω
+3. Kręć potencjometrem LM2596 do 5.0V ±0.1V
+4. Wyłącz zasilacz
+5. Podłącz ESP32: LM2596 OUT+ → VIN, OUT– → GND
+6. Nextion: 5V i GND ze wspólnego wyjścia LM2596 (patrz etap 2)
+7. Włącz zasilacz – sprawdź czy ESP32 świeci LED
+
+> ⚠️ Poniżej 4.8V Nextion może się nie inicjalizować lub wyświetlać artefakty.
+
+---
+
+## ETAP 2 – PODŁĄCZENIE NEXTION (UART)
 
 ```
-┌──────────────────────────────────────┐
-│         132.0 mm                     │
-│  ┌──────────────────────────────┐    │  82.8mm
-│  │  Obszar wyświetlacza         │    │
-│  │  122.0 × 72.6 mm             │    │
-│  └──────────────────────────────┘    │
-└──────────────────────────────────────┘
-Grubość modułu: 12.9 mm
+ESP32                        Nextion
+GPIO17 (TX2) ──────────────► RX  (pin 2 na złączu)   [żółty]
+GPIO16 (RX2) ◄────────────── TX  (pin 1 na złączu)   [zielony]
+GND          ──────────────► GND (pin 3)              [czarny]
+5V (LM2596)  ──────────────► 5V  (pin 4)              [czerwony]
 ```
 
-### Projekt obudowy
+> ⚠️ TX/RX ZAWSZE krzyżujemy: TX ESP32 → RX Nextion, RX ESP32 → TX Nextion.
+> To najczęstszy błąd przy UART – podłączenie TX→TX = brak komunikacji.
 
-```
-Widok z przodu:                    Widok z tyłu:
-┌────────────────────┐             ┌────────────────────┐
-│  ┌──────────────┐  │             │  [ESP32]           │
-│  │              │  │             │  [LM2596]          │
-│  │   NEXTION    │  │             │  [Buzzer]          │
-│  │   5.0"       │  │             │                    │
-│  │              │  │             │  ○ M2.5  ○ M2.5   │
-│  └──────────────┘  │             │                    │
-└────────────────────┘             │  ○ M2.5  ○ M2.5   │
-                                   └────────────────────┘
+### Buzzer
+
+- Buzzer SIG/+ → GPIO25
+- Buzzer GND/– → GND
+
+---
+
+## ETAP 3 – FIRMWARE ESP32
+
+### sentinel_view.yaml (szkielet)
+
+```yaml
+esphome:
+  name: sentinel-view
+  friendly_name: Sentinel View
+
+esp32:
+  board: esp32dev
+
+wifi:
+  ssid: SentinelHub
+  password: !secret wifi_ap_password
+  ap:
+    ssid: SentinelView-fallback
+
+uart:
+  id: nextion_uart
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 9600
+
+display:
+  - platform: nextion
+    id: nextion_display
+    uart_id: nextion_uart
+    update_interval: 30s
+    lambda: |-
+      // aktualizacja komponentów ekranu bieżącymi wartościami
+      // np. id(nextion_display).set_component_text("ph_val", "8.15");
 ```
 
-**Wskazówki do druku 3D:**
-- Materiał: PETG (lepszy niż PLA przy akwarium – wilgoć, temperatura)
-- Kolor: Biały lub czarny (czarny lepiej maskuje złącza)
-- Otwór na wyświetlacz: dokładnie 122.0 × 72.6 mm + 0.3mm tolerancja
-- Otwory montażowe Nextion: wg datasheetu (2× M3 po bokach)
-- Przejście kabla: od tyłu, z opaską kablową
+### Kroki wgrywania
 
-**Podstawka magnetyczna:**
-```
-[Obudowa Sentinel View]
-        │
-  [Przegub M6]   ← regulowany kąt (0–90°)
-        │
-  [Podstawka z magnesami N52]
-   🧲 🧲 🧲 🧲
-```
-Magnesy N52 10×2mm przyklejone epoksydem do podstawki → montaż na boku szafki akwaryjnej.
+1. Odłącz zasilacz 12V
+2. Podłącz ESP32 do komputera kablem USB
+3. ESPHome Dashboard: Install → Plug into this computer
+4. Jeśli błąd "Failed to initialize" – przytrzymaj BOOT na ESP32, kliknij RETRY, puść BOOT po 2 s
+5. Po wgraniu firmware odłącz USB
+6. Podłącz zasilacz 12V – sprawdź w logach: `WiFi connected to SentinelHub`
 
-### Checklist Etap 7
+---
 
-```
-☐ Obudowa wydrukowana lub zamówiona
-☐ Nextion wklejony/przykręcony do frontu
-☐ ESP32 i LM2596 umieszczone z tyłu
-☐ Kabel UART przeprowadzony wewnętrznie
-☐ Podstawka magnetyczna: magnesy przyklejone epoksydem
-☐ Przegub M6 zamontowany
-```
+## ETAP 4 – UI W NEXTION EDITOR
+
+### Instalacja Nextion Editor
+
+1. Pobierz ze strony nextion.com/download (bezpłatny, Windows)
+2. Zainstaluj i uruchom
+3. New Project → wybrać model: NX8048P050 → rozdzielczość 800×480
+
+### Planowane ekrany
+
+| Ekran | Nazwa | Zawartość |
+|-------|-------|-----------|
+| 0 | Home | pH, KH, Temp ×3, EC – kolorowe wskaźniki OK/WARN/ALARM |
+| 1 | Charts | Wykresy trendów 7-dniowych pH i temperatury |
+| 2 | Tests | Przyciski Start KH Test / Ca Test + status testu na żywo |
+| 3 | Settings | Harmonogram testów, kalibracja, info WiFi |
+| 4 | Alerts | Lista alertów + wyciszenie buzzera |
+
+### Wgranie UI na Nextion (przez kartę SD)
+
+1. Nextion Editor: File → TFT File Output → wybierz folder
+2. Skopiuj plik `.tft` na kartę microSD (FAT32, max 32 GB)
+3. Włóż kartę SD do gniazda w module Nextion
+4. Zasilaj Nextion – automatycznie wgra UI z karty (~30 s)
+5. Wyjmij kartę SD – Nextion uruchomi się z nowym UI
+
+> Alternatywnie: użyj Nextion Upload Tool do wgrania przez UART (bez karty SD,
+> szybciej przy kolejnych iteracjach UI).
+
+---
+
+## ETAP 5 – MONTAŻ MECHANICZNY
+
+### Obudowa 3D (PETG)
+
+Wymagania projektowe obudowy:
+- Otwór wyświetlacza: 122.0 × 72.6 mm (dokładne wymiary z datasheetu Nextion)
+- Moduł Nextion całkowity: 132.0 × 82.8 × 12.9 mm
+- Otwór kablowy: min. 8mm Ø (dolna ścianka)
+- Grubość ścianek: min. 2 mm
+- Otwory na wkładki gwintowane M2.5 (×4, w rogach ramy Nextion)
+
+### Kolejność montażu
+
+1. Wydrukuj obudowę PETG (30% infill, bez supportów przy dobrej orientacji)
+2. Wkładki gwintowane M2.5: wciśnij gorącą lutownicą w otwory obudowy
+3. Nextion: wsadź od frontu w otwór, przykręć 4× śruby M2.5
+4. ESP32 + LM2596: zamocuj taśmą VHB 3M wewnątrz tylnej części obudowy
+5. Poprowadź 4 przewody UART (GPIO16/17/GND/5V) do złącza Nextion
+6. Zamknij obudowę (śruby M2.5 w wkładki)
+7. Przegub kulowy M6: przykręć do dołu obudowy
+8. Magnesy N52: wklej epoksydem do podstawki (4 szt. dla pewnego chwytu)
+
+> ⚠️ Przed zamknięciem obudowy przetestuj wyświetlacz i komunikację UART.
+> Po skręceniu obudowy dostęp do portu USB ESP32 może być utrudniony.
 
 ---
 
 ## TROUBLESHOOTING
 
-### Problem: Nextion nie wyświetla nic po włączeniu
+### Nextion nie wyświetla nic (czarny ekran)
 
 ```
-Przyczyna 1: Brak zasilania 5V
-  → Sprawdź multimetrem napięcie na pin 4 (5V) Nextion
+Przyczyna 1: Brak wgranego UI
+  → Bez pliku .tft ekran jest czarny
+  → Wgraj UI przez kartę SD (patrz Etap 4)
 
-Przyczyna 2: UI nie wgrany
-  → Nowy Nextion wyświetla ekran demonstracyjny bez UI
-  → Wgraj projekt przez microSD lub UART
+Przyczyna 2: Za niskie napięcie zasilania
+  → Zmierz multimetrem napięcie na złączu Nextion
+  → Minimum 4.8V – poniżej ekran może się nie inicjalizować
 
-Przyczyna 3: UI wgrany dla złego modelu
-  → Projekt MUSI być stworzony dla NX8048P050_011C
-  → Plik .tft z innego modelu nie zadziała
+Przyczyna 3: Uszkodzony plik .tft
+  → Spróbuj ponownie skopiować plik na kartę SD
+  → Sprawdź czy karta SD jest FAT32 (nie exFAT, nie NTFS)
 ```
 
-### Problem: Nextion wyświetla UI ale dane się nie aktualizują
+### Dane nie aktualizują się na ekranie
 
 ```
-Przyczyna 1: TX i RX odwrócone
-  → Zamień GPIO16 ↔ GPIO17 w fizycznym połączeniu
-  → To najczęstszy błąd UART!
+Przyczyna 1: WiFi nie połączony z SentinelHub
+  → Sprawdź logi ESPHome: szuka "WiFi connected to SentinelHub"
+  → Sprawdź czy Sentinel Hub (Moduł 1) działa i AP SentinelHub jest aktywne
 
-Przyczyna 2: ESP32 nie łączy się z SentinelHub ESPHome API
-  → Sprawdź logi ESPHome – czy widać "ESPHome API connected"
+Przyczyna 2: TX/RX nie skrzyżowane
+  → Najczęstszy błąd! TX ESP32 MUSI iść do RX Nextion (i odwrotnie)
+  → Zamień GPIO16 i GPIO17 i przetestuj ponownie
 
-Przyczyna 3: Błędna nazwa etykiety w YAML
-  → Nazwa w YAML (np. pH.txt) musi dokładnie odpowiadać
-    nazwie komponentu na stronie Nextion Editor
+Przyczyna 3: Niezgodny baud_rate
+  → ESP32 i Nextion MUSZĄ mieć identyczny baud_rate (domyślnie 9600)
+  → Sprawdź ustawienie w Nextion Editor: Page0 → Preinitialize Event
 ```
 
-### Problem: Nextion się zawiesza lub restartuje
+### Buzzer nie działa
 
 ```
-Przyczyna 1: Niedomagające zasilanie
-  → Sprawdź czy LM2596 daje stabilne 5V pod obciążeniem
-  → Nextion pobiera do 500mA – upewnij się że LM2596 ma
-    rezerwę (używaj modelu 3A, nie 1A)
+Przyczyna 1: Zła polaryzacja
+  → SIG/+ → GPIO25, GND/– → GND
 
-Przyczyna 2: Przekroczenie limitu danych UART
-  → Zbyt częste wysyłanie komend (częściej niż co 100ms)
-  → Dodaj delay między komendami w YAML
-```
+Przyczyna 2: Buzzer pasywny wymaga PWM
+  → Prosty sygnał HIGH/LOW nie zadziała na buzzerze pasywnym
+  → Sprawdź czy w YAML używasz platform: ledc (PWM) a nie gpio
 
-### Problem: Dotyk nie reaguje
-
-```
-Przyczyna 1: Folia ochronna na ekranie
-  → NX8048P050-011C może mieć folię – zdejmij ją!
-
-Przyczyna 2: Wilgoć na ekranie
-  → Zetrzyj, poczekaj aż wyschnie
-
-Przyczyna 3: Zły model w projekcie Nextion Editor
-  → Pojemnościowy touch wymaga prawidłowego modelu w projekcie
+Przyczyna 3: Za niskie napięcie PWM
+  → ESP32 generuje 3.3V – większość buzzerów 5V działa, ale sprawdź datasheet
 ```
 
 ---
 
-## FINALNA CHECKLIST – SENTINEL VIEW GOTOWY
+## FINALNA CHECKLIST
 
 ```
 HARDWARE:
-☐ LM2596: 5.0V ±0.1V
-☐ Nextion podświetlenie świeci
-☐ UART TX/RX: dane płyną (nie odwrócone)
-☐ Buzzer: reaguje na komendę testową z HA
-
-OPROGRAMOWANIE:
-☐ ESPHome firmware wgrany
-☐ Połączenie z SentinelHub ESPHome API aktywne
-☐ UI Nextion wgrany (wszystkie 5 stron)
-☐ Dane z Sentinel Chem/Monitor aktualizują się na ekranie
-
-MECHANIKA:
-☐ Obudowa zamontowana
-☐ Podstawka magnetyczna trzyma pewnie
-☐ Kąt widzenia wygodny (przegub ustawiony)
+☐ LM2596: 5.0V ±0.1V zmierzone multimetrem
+☐ Nextion: 4.9–5.1V na złączu potwierdzone multimetrem
+☐ ESP32: boot OK (LED miga)
+☐ WiFi: połączony z SentinelHub (IP w logach)
+☐ UI wgrane na Nextion – Home screen widoczny
+☐ UART: dane z Hub widoczne na ekranie (pH, temp)
+☐ Buzzer: reaguje na testowy alert z ESPHome
+☐ Obudowa: Nextion przykręcony, tylna pokrywa zamknięta
+☐ Podstawka: przegub M6 + magnesy N52 trzymają mocno
 
 STATUS: ✅ Sentinel View gotowy!
+        Następny krok: BUILD_GUIDE_sentinel_connector.md
 ```
+
+---
+
+## NASTĘPNE KROKI
+
+Po ukończeniu Sentinel View:
+
+1. **Sentinel Connector (Module 5)** – opcjonalny, dla właścicieli Apex/GHL/Hydros
+2. **Rozbudowa UI** – dodaj ekran Ca/Mg gdy Moduł 3 gotowy (Q3 2026)
+3. **OTA aktualizacje** – firmware aktualizowany bezprzewodowo przez ESPHome
 
 ---
 
 ## POWIĄZANE DOKUMENTY
 
-- [`sentinel_view_BOM.md`](./sentinel_view_BOM.md) – Lista komponentów
-- [`NEXTION_UI_GUIDE.md`](./NEXTION_UI_GUIDE.md) *(do stworzenia)* – Szczegółowy przewodnik po Nextion Editor
-- [`BUILD_GUIDE_sentinel_hub.md`](./BUILD_GUIDE_sentinel_hub.md) – Module 1
+- `BOM_sentinel_view.md` – pełna lista komponentów z cenami
+- `BUILD_GUIDE_sentinel_connector.md` – Instrukcja montażu Modułu 5
+- `firmware/sentinel_view.yaml` *(do stworzenia)*
 
 ---
 
-*Reef Sentinel Lab – Open-source aquarium controller*  
-*reef-sentinel.com | github.com/reef-sentinel*  
-*Ostatnia aktualizacja: 2026-03-06*
-
+*Reef Sentinel Lab – Open-source aquarium controller*
+*reef-sentinel.com | github.com/reef-sentinel*
+*Ostatnia aktualizacja: 2026-03-07*

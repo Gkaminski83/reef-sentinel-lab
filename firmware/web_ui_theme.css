@@ -1,0 +1,47 @@
+/* Reef Sentinel Hub Web UI theme */
+:root {
+  --reef-bg-0: #030916;
+  --reef-bg-1: #081a3a;
+  --reef-accent: #29d4ff;
+  --reef-accent-soft: #19a8d4;
+}
+
+body {
+  background: radial-gradient(circle at 60% 0%, #0a2b63 0%, var(--reef-bg-1) 35%, var(--reef-bg-0) 100%) !important;
+}
+
+/* Debug marker: if this border is not visible, /0.css is not applied to main UI */
+body {
+  box-shadow: inset 0 0 0 2px rgba(41, 212, 255, 0.35) !important;
+}
+
+/* Attempt to place brand mark close to top-left title area */
+h1, h2, .title, .header-title, .mdc-top-app-bar__title {
+  position: relative;
+  padding-left: 44px !important;
+}
+
+h1::before, h2::before, .title::before, .header-title::before, .mdc-top-app-bar__title::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 32px;
+  height: 32px;
+  transform: translateY(-50%);
+  background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADgAAAAlCAYAAAAXzipbAAAEnklEQVR42u2XXWxURRTHz3zcj7273d22tLTbL1tSsIZAJTQgFZHyVRGt+EU0USOJaJrog4kxMSaVhGh8MRqN6JtPRkiMggmiISJYIpYVKq2LXbDQBloK3XY/7t67e++dOT7QR/HJ1my8v7fJnMycf87MnP8A+Pj4+Pj43BayEJt8Go8rbtuKVQGFbgYA6oI8RhQl/iIhbskK7JuaCsny6rYAFWtCjDWDEOnkDJtAKcidFRCjjEQLlI7aLgy4CiT2EmKWjMBX0vneQEBfTovFieuj+dTvU4GyWcnu5QreDwSIcMnJCIifltfYmbqWYAXTtLqCXRh6Nxrc/2/nwudDoENk+7kD/d9dHMr1KnVL2olCK6goQtEugMoBWEDfnmXa9h9HvNniF2PnWloD+1c/2dE1H7nQ+Vg0J9xsJpePcUPrIumxinXKJPCpESizJzIkdeWPXTHx+QPhVD/MXinnGuvKpjMxyzZz85HLvFTQ9iBnNFQ5UxcGCxpDmrCVbHM09PaGpbVXqqNlix5dt2z99XR29MjAgVbLhqpwS+tsgJBAyQh0HDJuNFWHCzfGrjY01pb37ujc17NmmX0zZaqargSn87alqUocrdkt9rT5bfuDj99BdeXXkjmiKOUZtbK8WUxPnuRWNrGmrb7mz8lU97WbGXljZvYFO5flP/QPbIOZ6aFNL/cckYTeBzOZ4yVTwdUNFYnT18xQ5doVp+jERJNSdIa9ot2Jjh3MFVzjl7PD+qFzibPt+3o1PRx6I+d6ez9ubLRLqg9uvZzu9iTffv753anNnR2Ptbc0GOvvvuv4SUeePxKJRsLh4FMoRIggfMM0/bPDsWi85JzMPYPp96zp3PiF119itbuesyq2btoqvUKXTqUFDL8vC/CCwtlNa6z6rRMbiVdyAlcMYpDlrdcKLrqeEG8Cc0aJZx8KRlRuhPg2BYrjYVCfPtxWlYNS9qLNX1593xVkLWXilF5mPKNFtCpNdT/hleWvnm4kNpS62QYAaPh6LCazzkdqeTjCQ9o7FzdGj/l/nf+KJw4i6xmyGh46n1t8u5idv+XrdybMWgAARGwyTbPmH3snYmM+n4/93ZxlWQ2IqC7YEX1kMLPUobyPIExwkEfRY64LaAnNHaWod1JwLhEBH3gq7zvaFohIKZ+liF9ZxeLPhmGsAoABz/NWcs5V13VnGGM9VMr+Wy4PFAAAzvkJz/M2CCEuE0J2CyE+NAxjfEEafUFq3BWeAQg6B9giqWylQFLEUQyqUhtclhUos4VA4AI4Tj1Qek0QskTX9YelJ4sAshMAaqWUk4wwFwCCgpAoInYAwGIppek4TjeldDEBSM0VAhfMybgUPClYAgBNQXBEIKnkBIc5UkcCWUmQHaOUdJxoJmnXcZZQQkxErJdSJhljVdIVA4TzGinlJSlljAJdjoghkDKNhIxQSi0hRBMghgDxDKG0DhHFgt3BPkS64ThyAIA9cVS2DE4Gu09jGABgRzy7aE8cle5kUpu7W8w0zVpEVObGVYioJJNJDREVPIgMEcOIGEJEFRHV4eFhdS42gogG3oql/uvn4+Pj4+Pj8//iL7NDROFPDz7IAAAAAElFTkSuQmCC');
+  background-size: contain;
+  background-repeat: no-repeat;
+}
+
+button, .mdc-button, .button {
+  border-color: var(--reef-accent-soft) !important;
+}
+
+a, .link, .value, .state {
+  color: var(--reef-accent) !important;
+}
+
+#reef-basic-charts {
+  box-shadow: 0 10px 28px rgba(5, 25, 62, 0.45);
+}

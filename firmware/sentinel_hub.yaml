@@ -59,6 +59,29 @@ web_server:
   port: 80
   local: true
   version: 3
+  css_url: "/0.css?v=reefhub4"
+  js_url: "/0.js?v=reefhub4"
+  css_include: web_ui_theme.css
+  js_include: web_ui_charts.js
+  sorting_groups:
+    - id: grp_main
+      name: "01 Main Dashboard"
+      sorting_weight: 1
+    - id: grp_chem_control
+      name: "02 Chem Control"
+      sorting_weight: 2
+    - id: grp_hub_control
+      name: "03 Hub Control"
+      sorting_weight: 3
+    - id: grp_chem_calibration
+      name: "04 Chem Calibration"
+      sorting_weight: 4
+    - id: grp_hub_diag
+      name: "05 Hub Diagnostics"
+      sorting_weight: 5
+    - id: grp_internal
+      name: "99 Internal (Auto Updated)"
+      sorting_weight: 99
 
 i2c:
   sda: GPIO21
@@ -70,6 +93,17 @@ spi:
   clk_pin: GPIO18
   mosi_pin: GPIO23
   miso_pin: GPIO19
+
+globals:
+  - id: hub_cloud_sync_interval_min
+    type: int
+    restore_value: true
+    initial_value: "15"
+
+  - id: last_cloud_sync_ms
+    type: uint32_t
+    restore_value: false
+    initial_value: "0"
 
 # Optional SD card section kept commented
 # sd_mmc_card:
@@ -116,6 +150,9 @@ sensor:
   - platform: template
     name: "pH"
     id: ph_value
+    web_server:
+      sorting_group_id: grp_main
+      sorting_weight: 10
     lambda: |-
       return id(chem_ph).state;
     update_interval: 30s
@@ -123,6 +160,9 @@ sensor:
   - platform: template
     name: "KH"
     id: kh_value
+    web_server:
+      sorting_group_id: grp_main
+      sorting_weight: 20
     lambda: |-
       return id(chem_kh).state;
     update_interval: 30s
@@ -130,6 +170,9 @@ sensor:
   - platform: template
     name: "Temperatura Akwarium"
     id: temp_aquarium
+    web_server:
+      sorting_group_id: grp_main
+      sorting_weight: 30
     lambda: |-
       return id(chem_temp_aquarium).state;
     update_interval: 30s
@@ -137,6 +180,9 @@ sensor:
   - platform: template
     name: "Temperatura Sump"
     id: temp_sump
+    web_server:
+      sorting_group_id: grp_main
+      sorting_weight: 40
     lambda: |-
       return id(chem_temp_sump).state;
     update_interval: 30s
@@ -144,6 +190,9 @@ sensor:
   - platform: template
     name: "Temperatura Komora"
     id: temp_chamber
+    web_server:
+      sorting_group_id: grp_main
+      sorting_weight: 50
     lambda: |-
       return id(chem_temp_chamber).state;
     update_interval: 30s
@@ -151,6 +200,9 @@ sensor:
   - platform: template
     name: "EC Zasolenie"
     id: ec_value
+    web_server:
+      sorting_group_id: grp_main
+      sorting_weight: 60
     lambda: |-
       return id(chem_ec).state;
     update_interval: 30s
@@ -158,6 +210,10 @@ sensor:
   - platform: wifi_signal
     name: "Hub WiFi Signal"
     id: hub_wifi_signal
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: grp_hub_diag
+      sorting_weight: 20
     update_interval: 60s
     unit_of_measurement: "dBm"
     device_class: signal_strength
@@ -165,16 +221,27 @@ sensor:
 
   - platform: uptime
     name: "Hub Uptime"
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: grp_hub_diag
+      sorting_weight: 30
     update_interval: 60s
     unit_of_measurement: "s"
 
 binary_sensor:
   - platform: status
     name: "Hub Status"
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: grp_hub_diag
+      sorting_weight: 10
 
   - platform: template
     name: "Test KH Aktywny"
     id: kh_test_active
+    web_server:
+      sorting_group_id: grp_main
+      sorting_weight: 70
     lambda: |-
       return id(chem_kh_test_active).state > 0.5f;
 
@@ -183,12 +250,23 @@ text_sensor:
     ip_address:
       name: "Hub IP Address"
       id: hub_ip_address
+      entity_category: diagnostic
+      web_server:
+        sorting_group_id: grp_hub_diag
+        sorting_weight: 40
     ssid:
       name: "Hub WiFi SSID"
+      entity_category: diagnostic
+      web_server:
+        sorting_group_id: grp_hub_diag
+        sorting_weight: 50
 
   - platform: template
     name: "Ostatni Test KH"
     id: last_kh_result
+    web_server:
+      sorting_group_id: grp_main
+      sorting_weight: 80
     lambda: |-
       char buf[32];
       if (isnan(id(kh_value).state)) {
@@ -201,6 +279,10 @@ number:
   - platform: template
     name: "chem_ph"
     id: chem_ph
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: grp_internal
+      sorting_weight: 10
     optimistic: true
     restore_value: true
     min_value: -1
@@ -210,6 +292,10 @@ number:
   - platform: template
     name: "chem_kh"
     id: chem_kh
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: grp_internal
+      sorting_weight: 20
     optimistic: true
     restore_value: true
     min_value: -1
@@ -219,6 +305,10 @@ number:
   - platform: template
     name: "chem_temp_aquarium"
     id: chem_temp_aquarium
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: grp_internal
+      sorting_weight: 30
     optimistic: true
     restore_value: true
     min_value: -20
@@ -228,6 +318,10 @@ number:
   - platform: template
     name: "chem_temp_sump"
     id: chem_temp_sump
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: grp_internal
+      sorting_weight: 40
     optimistic: true
     restore_value: true
     min_value: -20
@@ -237,6 +331,10 @@ number:
   - platform: template
     name: "chem_temp_chamber"
     id: chem_temp_chamber
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: grp_internal
+      sorting_weight: 50
     optimistic: true
     restore_value: true
     min_value: -20
@@ -246,6 +344,10 @@ number:
   - platform: template
     name: "chem_ec"
     id: chem_ec
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: grp_internal
+      sorting_weight: 60
     optimistic: true
     restore_value: true
     min_value: -1
@@ -255,6 +357,10 @@ number:
   - platform: template
     name: "chem_kh_test_active"
     id: chem_kh_test_active
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: grp_internal
+      sorting_weight: 70
     optimistic: true
     restore_value: true
     min_value: 0
@@ -265,6 +371,10 @@ number:
   - platform: template
     name: "chem_publish_interval_s"
     id: chem_publish_interval_s
+    entity_category: config
+    web_server:
+      sorting_group_id: grp_chem_control
+      sorting_weight: 10
     optimistic: true
     restore_value: true
     min_value: 10
@@ -275,6 +385,10 @@ number:
   - platform: template
     name: "chem_kh_interval_h"
     id: chem_kh_interval_h
+    entity_category: config
+    web_server:
+      sorting_group_id: grp_chem_control
+      sorting_weight: 20
     optimistic: true
     restore_value: true
     min_value: 0
@@ -285,6 +399,10 @@ number:
   - platform: template
     name: "chem_ph_cal_v4"
     id: chem_ph_cal_v4
+    entity_category: config
+    web_server:
+      sorting_group_id: grp_chem_calibration
+      sorting_weight: 10
     optimistic: true
     restore_value: true
     min_value: 0
@@ -295,6 +413,10 @@ number:
   - platform: template
     name: "chem_ph_cal_v7"
     id: chem_ph_cal_v7
+    entity_category: config
+    web_server:
+      sorting_group_id: grp_chem_calibration
+      sorting_weight: 20
     optimistic: true
     restore_value: true
     min_value: 0
@@ -305,6 +427,10 @@ number:
   - platform: template
     name: "chem_ph_cal_liquid1_ph"
     id: chem_ph_cal_liquid1_ph
+    entity_category: config
+    web_server:
+      sorting_group_id: grp_chem_calibration
+      sorting_weight: 30
     optimistic: true
     restore_value: true
     min_value: 0
@@ -315,6 +441,10 @@ number:
   - platform: template
     name: "chem_ph_cal_liquid2_ph"
     id: chem_ph_cal_liquid2_ph
+    entity_category: config
+    web_server:
+      sorting_group_id: grp_chem_calibration
+      sorting_weight: 40
     optimistic: true
     restore_value: true
     min_value: 0
@@ -325,6 +455,10 @@ number:
   - platform: template
     name: "chem_pump_cal_duration_s"
     id: chem_pump_cal_duration_s
+    entity_category: config
+    web_server:
+      sorting_group_id: grp_chem_calibration
+      sorting_weight: 50
     optimistic: true
     restore_value: true
     min_value: 1
@@ -335,6 +469,10 @@ number:
   - platform: template
     name: "chem_pump_hcl_ml_per_pulse"
     id: chem_pump_hcl_ml_per_pulse
+    entity_category: config
+    web_server:
+      sorting_group_id: grp_chem_calibration
+      sorting_weight: 60
     optimistic: true
     restore_value: true
     min_value: 0.001
@@ -342,52 +480,101 @@ number:
     step: 0.001
     initial_value: 0.050
 
+  - platform: template
+    name: "hub_cloud_sync_interval_min"
+    id: hub_cloud_sync_interval_min_cfg
+    optimistic: true
+    restore_value: true
+    min_value: 1
+    max_value: 360
+    step: 1
+    initial_value: 15
+    entity_category: config
+    web_server:
+      sorting_group_id: grp_hub_control
+      sorting_weight: 10
+    set_action:
+      - globals.set:
+          id: hub_cloud_sync_interval_min
+          value: !lambda "return (int) x;"
+
 button:
   - platform: restart
     name: "Hub Restart"
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: grp_hub_diag
+      sorting_weight: 60
 
   - platform: template
     name: "Force Cloud Sync"
+    web_server:
+      sorting_group_id: grp_hub_control
+      sorting_weight: 20
     on_press:
       - script.execute: cloud_sync
 
   - platform: template
     name: "Start Test KH"
+    web_server:
+      sorting_group_id: grp_chem_control
+      sorting_weight: 30
     on_press:
       - script.execute: start_kh_test_remote
 
   - platform: template
     name: "Apply Chem Settings"
+    web_server:
+      sorting_group_id: grp_chem_control
+      sorting_weight: 40
     on_press:
       - script.execute: apply_chem_settings
 
   - platform: template
     name: "Chem pH Cal Capture Liquid2"
+    web_server:
+      sorting_group_id: grp_chem_calibration
+      sorting_weight: 70
     on_press:
       - script.execute: chem_ph_cal_capture_7
 
   - platform: template
     name: "Chem pH Cal Capture Liquid1"
+    web_server:
+      sorting_group_id: grp_chem_calibration
+      sorting_weight: 80
     on_press:
       - script.execute: chem_ph_cal_capture_4
 
   - platform: template
     name: "Chem Pump Cal Run Sample"
+    web_server:
+      sorting_group_id: grp_chem_calibration
+      sorting_weight: 90
     on_press:
       - script.execute: chem_pump_cal_run_sample
 
   - platform: template
     name: "Chem Pump Cal Run HCL"
+    web_server:
+      sorting_group_id: grp_chem_calibration
+      sorting_weight: 100
     on_press:
       - script.execute: chem_pump_cal_run_hcl
 
   - platform: template
     name: "Chem Pump Cal Run Waste"
+    web_server:
+      sorting_group_id: grp_chem_calibration
+      sorting_weight: 110
     on_press:
       - script.execute: chem_pump_cal_run_waste
 
   - platform: template
     name: "Chem Pump Cal Run RO"
+    web_server:
+      sorting_group_id: grp_chem_calibration
+      sorting_weight: 120
     on_press:
       - script.execute: chem_pump_cal_run_ro
 
@@ -593,14 +780,21 @@ script:
           request_headers:
             Content-Type: text/plain
 
+  - id: cloud_sync_scheduler_tick
+    then:
+      - lambda: |-
+          const uint32_t now_ms = millis();
+          const uint32_t due_ms = (uint32_t) id(hub_cloud_sync_interval_min) * 60U * 1000U;
+          if (id(last_cloud_sync_ms) == 0 || (now_ms - id(last_cloud_sync_ms)) >= due_ms) {
+            id(last_cloud_sync_ms) = now_ms;
+            id(cloud_sync).execute();
+          }
+
 interval:
   - interval: 10s
     then:
       - script.execute: update_oled
-
-  - interval: 15min
-    then:
-      - script.execute: cloud_sync
+      - script.execute: cloud_sync_scheduler_tick
 
 http_request:
   useragent: "sentinel-hub/1.1 ESPHome"
